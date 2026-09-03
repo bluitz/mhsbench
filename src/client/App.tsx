@@ -537,7 +537,7 @@ function summarize(e: LabEvent): string {
 // ---------- Styles ----------
 
 const CSS = `
-  :root { --proposed: #3b5bdb; --running: #d97706; --success: #16a34a; --failure: #dc2626; --error: #c026d3; --rejected: #6b7280; }
+  :root { --proposed: #3b5bdb; --running: #0d9488; --success: #16a34a; --failure: #ea580c; --error: #dc2626; --rejected: #6b7280; }
   * { box-sizing: border-box; }
   body { margin: 0; font-family: -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; background: #f3f4f6; color: #111827; }
   .page { max-width: 1400px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
@@ -557,7 +557,7 @@ const CSS = `
   .toggle input { margin-top: 3px; transform: scale(1.3); }
   .button { border: none; border-radius: 8px; padding: 10px 14px; font-size: 14px; cursor: pointer; background: #e5e7eb; color: #111827; text-decoration: none; display: inline-block; }
   .button:disabled { opacity: 0.45; cursor: not-allowed; }
-  .button.primary { background: var(--proposed); color: white; } .button.danger { background: var(--failure); color: white; }
+  .button.primary { background: var(--proposed); color: white; } .button.danger { background: var(--error); color: white; }
   .button.secondary { background: #e5e7eb; } .button.large { font-size: 18px; padding: 14px 22px; margin-top: 8px; }
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; }
@@ -567,7 +567,7 @@ const CSS = `
   .now-detail.fault { background: #b45309; } .now-detail.escalated { background: #991b1b; } .now-detail.success { background: #166534; }
   .now-detail.error-box { background: #7f1d1d; }
   .stage-proposing, .stage-reviewing_history, .stage-reviewing { background: #1e3a8a; }
-  .stage-awaiting_approval { background: #5b21b6; } .stage-running, .stage-evaluating { background: #b45309; }
+  .stage-awaiting_approval { background: #5b21b6; } .stage-running, .stage-evaluating { background: #0f766e; }
   .stage-awaiting_human { background: #991b1b; } .stage-agent_error { background: #7f1d1d; } .stage-complete { background: #166534; }
   .legend { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
@@ -585,7 +585,7 @@ const CSS = `
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
   .columns { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
   .hypothesis { border: 2px solid var(--proposed); border-radius: 10px; padding: 12px; display: grid; gap: 8px; }
-  .hypothesis.escalated { border-color: var(--failure); background: #fef2f2; }
+  .hypothesis.escalated { border-color: var(--error); background: #fef2f2; }
   .rationale { font-size: 15px; line-height: 1.4; }
   .edit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .edit-grid label { display: grid; gap: 4px; font-size: 12px; color: #6b7280; }
