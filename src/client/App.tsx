@@ -314,13 +314,34 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
 
 // ---------- Saved result: the JSON file written when two experiments succeed in a row ----------
 
+/** The shape of results/<run id>.json, as written by the loop. */
+interface SavedResultFile {
+  sample: string;
+  completed_at: string;
+  optimal_parameters: { flow_rate_uL_per_s: number; mixing_cycles: number };
+  best_rmse: number;
+  assay_tolerance: number;
+  confirmed_by_experiments: Array<{ id: string; flow_rate_uL_per_s: number; rmse: number }>;
+  experiments_run: number;
+}
+
 function SavedResult({ result, showFileLink }: { result: NonNullable<RunState["result"]>; showFileLink: boolean }) {
+  let saved: SavedResultFile | null = null;
+  try {
+    saved = JSON.parse(result.resultJson) as SavedResultFile;
+  } catch {
+    saved = null; // an older or malformed file: fall back to what the event carries
+  }
+  const confirmedBy = saved
+    ? saved.confirmed_by_experiments.map((c) => `experiment ${c.id.replace("exp-", "")} at ${c.flow_rate_uL_per_s} µL/s (RMSE ${c.rmse})`).join(" and ")
+    : result.confirmedBy.join(" and ");
+
   return (
     <section className="panel result-panel">
       <div className="title-row">
         <div>
           <h2>Saved result</h2>
-          <p className="muted">The confirmed parameters were written to a file on the server. This is that file, read back from disk.</p>
+          <p className="muted">The confirmed parameters were written to a file on the server. This is what that file says, read back from disk.</p>
         </div>
         {showFileLink && (
           <a className="button secondary" href={`/${result.resultFile}`} target="_blank" rel="noreferrer">
@@ -328,7 +349,18 @@ function SavedResult({ result, showFileLink }: { result: NonNullable<RunState["r
           </a>
         )}
       </div>
-      <pre className="json">{result.resultJson}</pre>
+      <table className="result-table">
+        <tbody>
+          {saved && <tr><td>Sample</td><td>{saved.sample}</td></tr>}
+          <tr><td>Optimal flow rate</td><td><strong>{result.bestFlowRate} µL/s</strong></td></tr>
+          {saved && <tr><td>Mixing cycles</td><td>{saved.optimal_parameters.mixing_cycles}</td></tr>}
+          <tr><td>Best RMSE</td><td>{result.bestRmse}{saved ? ` (assay tolerance ${saved.assay_tolerance})` : ""}</td></tr>
+          <tr><td>Confirmed by</td><td>{confirmedBy}</td></tr>
+          <tr><td>Experiments run</td><td>{result.experiments}</td></tr>
+          {saved && <tr><td>Completed</td><td>{new Date(saved.completed_at).toLocaleString()}</td></tr>}
+          <tr><td>Saved to</td><td>{result.resultFile}</td></tr>
+        </tbody>
+      </table>
     </section>
   );
 }
@@ -804,7 +836,7 @@ const CSS = `
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }
   .tag.gold { background: #facc15; color: #111827; }
   .result-panel { border: 2px solid var(--success); }
-  .json { background: #f0fdf4; border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 13px; margin: 0; }
+  .result-table { max-width: 720px; font-size: 14px; } .result-table td { padding: 6px 8px; } .result-table td:first-child { width: 180px; }
   .card.current { outline: 3px solid #111827; outline-offset: 2px; }
   .card.status-proposed { background: var(--proposed); } .card.status-running { background: var(--running); animation: pulse 1.2s infinite; }
   .card.status-success { background: var(--success); } .card.status-failure { background: var(--failure); } .card.status-error { background: var(--error); }
