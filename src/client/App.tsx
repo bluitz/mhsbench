@@ -20,6 +20,7 @@ import {
 } from "../shared/types";
 
 const REPLAY_STEP_MS = 400;
+const CROSSFADE_MS = 400;
 
 // ---------- Talking to the server ----------
 
@@ -278,7 +279,7 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
   return (
     <section className={`now stage-${state.stage}`}>
       <div className="now-label">Now</div>
-      <div className="now-text">{STAGE_TEXT[state.stage]}</div>
+      <CrossFade text={STAGE_TEXT[state.stage]} />
       {state.retry && (
         <div className="now-detail">
           Claude API error, retry {state.retry.attempt} of {state.retry.maxAttempts}, waiting {Math.round(state.retry.delayMs / 1000)} s.
@@ -300,7 +301,11 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
           </div>
         </div>
       )}
-      {faultText && <div className={`now-detail ${state.fault?.escalated ? "escalated" : "fault"}`}>{faultText}</div>}
+      {faultText && (
+        <div key={faultText} className={`now-detail ${state.fault?.escalated ? "escalated" : "fault"}`}>
+          {faultText}
+        </div>
+      )}
       {state.result && (
         <div className="now-detail success">
           Optimal flow rate confirmed: {state.result.bestFlowRate} µL/s (RMSE {state.result.bestRmse}) after {state.result.experiments} experiments.
@@ -309,6 +314,33 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
       )}
       {state.abortReason && <div className="now-detail error-box">{state.abortReason}</div>}
     </section>
+  );
+}
+
+/** Swap the banner text gently: the old line fades out underneath while the new one fades in. */
+function CrossFade({ text }: { text: string }) {
+  const [shown, setShown] = useState(text);
+  const [previous, setPrevious] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (text === shown) return;
+    setPrevious(shown);
+    setShown(text);
+    const timer = setTimeout(() => setPrevious(null), CROSSFADE_MS);
+    return () => clearTimeout(timer);
+  }, [text, shown]);
+
+  return (
+    <div className="crossfade">
+      {previous && (
+        <div key={`old-${previous}`} className="now-text fade-out">
+          {previous}
+        </div>
+      )}
+      <div key={`new-${shown}`} className="now-text fade-in">
+        {shown}
+      </div>
+    </div>
   );
 }
 
@@ -809,10 +841,15 @@ const CSS = `
   .button.demo { background: #6d28d9; color: white; }
   .button.demo.active { background: #3b0764; outline: 3px solid #c4b5fd; outline-offset: 2px; }
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-  .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; }
+  .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; transition: background-color 0.5s ease; }
+  .crossfade { position: relative; }
+  .crossfade .fade-out { position: absolute; inset: 0; animation: fadeOut 0.4s ease forwards; }
+  .crossfade .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
   .now-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }
   .now-text { font-size: 28px; font-weight: 600; }
-  .now-detail { font-size: 16px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.15); }
+  .now-detail { font-size: 16px; padding: 10px 12px; border-radius: 8px; background: rgba(255,255,255,0.15); animation: fadeIn 0.4s ease; }
   .now-detail.fault { background: #b45309; } .now-detail.escalated { background: #991b1b; } .now-detail.success { background: #166534; }
   .now-detail.error-box { background: #7f1d1d; }
   .stage-proposing, .stage-reviewing_history, .stage-reviewing { background: #1e3a8a; }
@@ -826,16 +863,16 @@ const CSS = `
   .slot { flex: 0 0 190px; display: grid; gap: 6px; }
   .slot-markers { min-height: 60px; display: grid; align-content: end; gap: 4px; }
   .card.ghost { background: transparent; border: 2px dashed #9ca3af; color: #6b7280; display: grid; place-content: center; cursor: default; }
-  .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; animation: fadeIn 0.5s ease; }
   .marker.fault { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; }
   .marker.reviewer { background: #dcfce7; color: #166534; border: 1px solid #86efac; border-left: 5px solid #16a34a; }
   .marker.operator { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-left: 5px solid #d97706; }
   .button.fault.operator { background: #fffbeb; border-color: #fcd34d; }
-  .card { width: 100%; height: 176px; overflow: hidden; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; align-content: start; font-size: 13px; cursor: pointer; }
+  .card { width: 100%; height: 176px; overflow: hidden; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; align-content: start; font-size: 13px; cursor: pointer; animation: fadeIn 0.5s ease; transition: background-color 0.5s ease; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }
   .tag.gold { background: #facc15; color: #111827; }
-  .result-panel { border: 2px solid var(--success); }
+  .result-panel { border: 2px solid var(--success); animation: fadeIn 0.6s ease; }
   .result-table { max-width: 720px; font-size: 14px; } .result-table td { padding: 6px 8px; } .result-table td:first-child { width: 180px; }
   .card.current { outline: 3px solid #111827; outline-offset: 2px; }
   .card.status-proposed { background: var(--proposed); } .card.status-running { background: var(--running); animation: pulse 1.2s infinite; }
