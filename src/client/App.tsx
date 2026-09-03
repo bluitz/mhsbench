@@ -268,10 +268,10 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
   const stripRef = useRef<HTMLDivElement>(null);
   const currentId = state.pendingExperimentId ?? state.experiments.find((x) => x.status === "running")?.id ?? state.experiments.at(-1)?.id;
 
-  // Keep the previous, current, and proposed experiments in view.
+  // Bring the current experiment into view only if it has wrapped off screen; never yank a page that already shows it.
   useEffect(() => {
     const card = stripRef.current?.querySelector<HTMLElement>('[data-current="true"]');
-    card?.scrollIntoView({ block: "center", behavior: "smooth" });
+    card?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [currentId, state.experiments.length]);
 
   return (
