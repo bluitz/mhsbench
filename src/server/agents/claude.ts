@@ -19,14 +19,20 @@ export interface Agent {
 }
 
 const MODEL = process.env.AGENT_MODEL ?? "claude-sonnet-5";
-// Reads ANTHROPIC_API_KEY from the environment. Identity-linked keys must also name the workspace they act in.
-const client = new Anthropic({
-  defaultHeaders: process.env.ANTHROPIC_WORKSPACE_ID ? { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID } : {},
-});
+
+// Created on first use so importing this file needs no API key. Reads ANTHROPIC_API_KEY from the environment;
+// identity-linked keys must also name the workspace they act in.
+let client: Anthropic | null = null;
+function getClient(): Anthropic {
+  client ??= new Anthropic({
+    defaultHeaders: process.env.ANTHROPIC_WORKSPACE_ID ? { "anthropic-workspace-id": process.env.ANTHROPIC_WORKSPACE_ID } : {},
+  });
+  return client;
+}
 
 export const claudeAgent: Agent = {
   async propose(context) {
-    const response = await client.messages.create({
+    const response = await getClient().messages.create({
       model: MODEL,
       max_tokens: 2000,
       thinking: { type: "adaptive" },

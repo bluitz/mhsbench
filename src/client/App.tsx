@@ -242,7 +242,6 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
 function DemoButtons({ activeName }: { activeName: string | null }) {
   return (
     <div className="demos">
-      <span className="muted">Watch a demo:</span>
       {DEMOS.map((d) => (
         <a key={d.name} className={`button demo ${d.name === activeName ? "active" : ""}`} href={`#demo=${d.name}`}>
           Demo: {d.title}

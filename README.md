@@ -64,7 +64,7 @@ the same reducer as a live run, so the demo is the product, not a mock-up.
 bun install
 cp .env.example .env   # then fill in the values
 bun run dev            # builds the client, starts the server on http://localhost:3000
-bun test               # simulator tests
+bun test               # 41 tests: simulator and driver, scoring, reducer, reviewer rules, proposal parsing, run store, loop with a scripted agent, HTTP routes
 bun run typecheck
 ```
 

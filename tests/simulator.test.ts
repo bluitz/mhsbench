@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Driver, Simulator, expectedRmse } from "../src/server/lab/bench";
+import { Driver, Simulator, expectedRmse, manifestText } from "../src/server/lab/bench";
 import { FLUID_CARDS } from "../src/shared/fluids";
 import { meanDeliveredOf, rmseOf } from "../src/shared/score";
 
@@ -41,6 +41,25 @@ describe("error model", () => {
 });
 
 describe("driver", () => {
+  test("describes both devices with their allowed ranges", () => {
+    const text = manifestText();
+    expect(text).toContain("flow_rate_uL_per_s (allowed 5 to 250)");
+    expect(text).toContain("mixing_cycles (allowed 0 to 10)");
+    expect(text).toContain("read_absorbance");
+  });
+
+  test("rejects an unknown action or tag without touching the bench", () => {
+    const { driver } = bench("water");
+    expect(driver.call("liquid_handler", "self_destruct").code).toBe("DRIVER_REJECTED");
+    expect(driver.write("plate_reader", "gain", 3).code).toBe("DRIVER_REJECTED");
+  });
+
+  test("loads a fresh plate when the current one is full", () => {
+    const { driver } = bench("water");
+    for (let i = 0; i < 12; i++) driver.call("liquid_handler", "move_to_clean_wells");
+    expect(driver.snapshot().liquid_handler.current_wells).toBe("Plate 2, A1-A8");
+  });
+
   test("rejects an out-of-range flow rate without changing the device", () => {
     const { driver } = bench("water");
     const result = driver.write("liquid_handler", "flow_rate_uL_per_s", 500);

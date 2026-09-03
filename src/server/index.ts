@@ -14,7 +14,7 @@ import { RunManager, type CommandResult } from "./runs";
 const HEARTBEAT_MS = 10_000; // keeps the proxy from closing an idle stream while a human thinks
 const POLL_MS = 100;
 
-const app = new Hono();
+export const app = new Hono(); // exported so tests can call routes without starting a server
 const runs = new RunManager();
 
 app.get("/health", (c) => c.json({ ok: true }));
