@@ -6,7 +6,7 @@
 import { FLUID_CARDS } from "../shared/fluids";
 import { fold } from "../shared/reducer";
 import { meanDeliveredOf, rmseOf } from "../shared/score";
-import type { ExperimentProposal, ExperimentStatus, FluidCard, Proposal, RunState, Stage } from "../shared/types";
+import type { ExperimentProposal, ExperimentStatus, ExperimentView, FluidCard, Proposal, RunState, Stage } from "../shared/types";
 import { MAX_EXPERIMENTS, MAX_FAULT_ATTEMPTS } from "../shared/types";
 import type { AgentContext, Agent } from "./agents/claude";
 import { ruleBasedReview } from "./agents/reviewer";
@@ -236,11 +236,25 @@ function recordFaultAttempt(run: Run, state: RunState) {
 
 // ---------- Conclusion check ----------
 
+// To claim an optimum the agent must show it is a minimum: two successes there, and a nearby slower
+// and faster flow rate (10% to 60% away on each side) that both scored worse.
+const BRACKET_NEAR = 1.1;
+const BRACKET_FAR = 1.6;
+
 function checkConclusion(state: RunState, flowRate: number): { ok: true; bestRmse: number } | { ok: false; reason: string } {
-  const closeEnough = (a: number, b: number) => Math.abs(a - b) / b < 0.02;
-  const successes = state.experiments.filter((x) => x.status === "success" && closeEnough(x.proposal.flow_rate_uL_per_s, flowRate));
-  if (successes.length >= 2) {
-    return { ok: true, bestRmse: Math.min(...successes.map((x) => x.rmse!)) };
+  const measured = state.experiments.filter((x) => x.status === "success" || x.status === "failure");
+  const flowOf = (x: ExperimentView) => x.proposal.flow_rate_uL_per_s;
+  const successesHere = measured.filter((x) => x.status === "success" && Math.abs(flowOf(x) - flowRate) / flowRate < 0.02);
+  if (successesHere.length < 2) {
+    return { ok: false, reason: `Need two successful experiments at ${flowRate} uL/s, found ${successesHere.length}.` };
   }
-  return { ok: false, reason: `Cannot conclude at ${flowRate} uL/s: need two successful experiments at that flow rate, found ${successes.length}.` };
+  const bestRmse = Math.min(...successesHere.map((x) => x.rmse!));
+  const worseWithin = (low: number, high: number) => measured.some((x) => flowOf(x) >= low && flowOf(x) <= high && x.rmse! > bestRmse);
+  const slowerIsWorse = worseWithin(flowRate / BRACKET_FAR, flowRate / BRACKET_NEAR);
+  const fasterIsWorse = worseWithin(flowRate * BRACKET_NEAR, flowRate * BRACKET_FAR);
+  if (!slowerIsWorse || !fasterIsWorse) {
+    const side = !slowerIsWorse ? "slower" : "faster";
+    return { ok: false, reason: `The optimum is not bracketed yet: run an experiment 10% to 60% ${side} than ${flowRate} uL/s to show it scores worse.` };
+  }
+  return { ok: true, bestRmse };
 }

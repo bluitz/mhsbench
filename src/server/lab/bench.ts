@@ -51,6 +51,7 @@ export class Simulator implements BenchControl {
   // Physical state of the instruments.
   private tipAttached = false;
   private tipPosition = 1;
+  private plateNumber = 1;
   private wellGroup = 1;
   private flowRate = 50;
   private mixingCycles = 3;
@@ -63,7 +64,7 @@ export class Simulator implements BenchControl {
   private fault: FaultKind | null = null;
   private badTipPosition: number | null = null; // tip pickup fails at this rack position
   private tipClogged = false;
-  private bubblyWellGroup: number | null = null; // the wells that currently have bubbles
+  private bubblyWells: string | null = null; // which wells currently have bubbles, as 'plate-group'
   private humanInLoop = false;
 
   constructor(private fluid: FluidId) {}
@@ -77,7 +78,7 @@ export class Simulator implements BenchControl {
       this.badTipPosition = this.tipPosition;
     }
     if (fault === "clogged_tip") this.tipClogged = true;
-    if (fault === "bubbles") this.bubblyWellGroup = this.wellGroup;
+    if (fault === "bubbles") this.bubblyWells = this.wellKey();
   }
 
   activeFault(): FaultKind | null {
@@ -96,7 +97,7 @@ export class Simulator implements BenchControl {
       liquid_handler: {
         tip_attached: this.tipAttached,
         tip_position: this.tipPosition,
-        current_wells: `${row}1-${row}8`,
+        current_wells: `Plate ${this.plateNumber}, ${row}1-${row}8`,
         flow_rate_uL_per_s: this.flowRate,
         mixing_cycles: this.mixingCycles,
         last_dispensed_volume_uL: this.lastDispensedUl,
@@ -120,10 +121,13 @@ export class Simulator implements BenchControl {
         if (this.fault === "clogged_tip") this.fault = null;
         return { ok: true };
       case "liquid_handler.move_to_clean_wells":
+        // When the plate is full a fresh plate is loaded, the way a robotic arm would swap it.
         if (this.wellGroup >= WELL_GROUPS_PER_PLATE) {
-          return { ok: false, code: "E-300", message: "PLATE_FULL: no clean well groups remain on this plate." };
+          this.plateNumber += 1;
+          this.wellGroup = 1;
+        } else {
+          this.wellGroup += 1;
         }
-        this.wellGroup += 1;
         return { ok: true };
       case "liquid_handler.transfer":
         return this.transfer();
@@ -137,6 +141,10 @@ export class Simulator implements BenchControl {
       default:
         return { ok: false, code: "E-000", message: `Unknown command ${cmd.device}.${cmd.action}` };
     }
+  }
+
+  private wellKey(): string {
+    return `${this.plateNumber}-${this.wellGroup}`;
   }
 
   private pickUpTip(advance: boolean): BenchOutcome {
@@ -157,13 +165,13 @@ export class Simulator implements BenchControl {
   /** Simulation rule for bubbles: nothing clears them until a human is in the loop. */
   private bubblesBlockTransfer(): BenchOutcome | null {
     if (this.fault !== "bubbles") return null;
-    const inCleanWells = this.wellGroup !== this.bubblyWellGroup;
+    const inCleanWells = this.wellKey() !== this.bubblyWells;
     const gentleMixing = this.mixingCycles <= 1;
     if (this.humanInLoop && inCleanWells && gentleMixing) {
       this.fault = null;
       return null;
     }
-    this.bubblyWellGroup = this.wellGroup; // the wells just used are bubbly now too
+    this.bubblyWells = this.wellKey(); // the wells just used are bubbly now too
     this.lastDeliveredFractions = null;
     this.lastDispensedUl = null;
     return {
@@ -223,7 +231,7 @@ export const LIQUID_HANDLER_MANIFEST: ManifestEntry[] = [
   { kind: "action", name: "eject_tip", description: "Discard the attached tip." },
   { kind: "action", name: "transfer", description: "Transfer 100 uL of dyed liquid into the 8 current wells at the current flow rate. May fail with E-217 FLUID_DETECTION_ERROR." },
   { kind: "action", name: "mix", description: "Mix the current wells using mixing_cycles cycles." },
-  { kind: "action", name: "move_to_clean_wells", description: "Advance to the next unused group of 8 wells (12 groups per plate)." },
+  { kind: "action", name: "move_to_clean_wells", description: "Advance to the next unused group of 8 wells. When the plate is full a fresh plate is loaded." },
 ];
 
 export const PLATE_READER_MANIFEST: ManifestEntry[] = [

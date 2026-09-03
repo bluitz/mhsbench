@@ -14,7 +14,7 @@ const EMPTY_DEVICES: DeviceState = {
   liquid_handler: {
     tip_attached: false,
     tip_position: 1,
-    current_wells: "A1-A8",
+    current_wells: "Plate 1, A1-A8",
     flow_rate_uL_per_s: 50,
     mixing_cycles: 3,
     last_dispensed_volume_uL: null,
