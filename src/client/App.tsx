@@ -184,23 +184,21 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
         A Claude agent finds the best liquid handler flow rate for a protein sample by running experiments on a simulated
         bench. Inject faults, approve or reject its hypotheses, and watch it recover.
       </p>
-      {/* Status badges on the left, actions anchored to the right so they never move when a badge appears. */}
+      {/* Two fixed rows: status badges, then the demo buttons with New run at the far right. Nothing shifts as badges come and go. */}
       <div className="toolbar">
-        <div className="badges">
-          {view && (
-            <>
-              <span className="badge">{demo ? `Demo: ${demo.title}` : `Sample: ${FLUID_CARDS[state.fluidId].name}`}</span>
-              <span className="badge" title="Claude reads the experiments so far and proposes the next flow rate, mixing cycles, tip action and wells as one JSON hypothesis.">
-                Agent: Claude
-              </span>
-              {replaying && <span className="badge replay">{demo ? "Replaying a recorded run" : "Replaying this run"}</span>}
-            </>
-          )}
-        </div>
+        {view && (
+          <div className="badges">
+            <span className="badge">{demo ? `Demo: ${demo.title}` : `Sample: ${FLUID_CARDS[state.fluidId].name}`}</span>
+            <span className="badge" title="Claude reads the experiments so far and proposes the next flow rate, mixing cycles, tip action and wells as one JSON hypothesis.">
+              Agent: Claude
+            </span>
+            {replaying && <span className="badge replay">{demo ? "Replaying a recorded run" : "Replaying this run"}</span>}
+          </div>
+        )}
         <div className="actions">
           <DemoButtons activeName={view?.kind === "demo" ? view.name : null} />
           {view && (
-            <a className="button secondary" href="#">
+            <a className="button secondary push-right" href="#">
               New run
             </a>
           )}
@@ -745,9 +743,10 @@ const CSS = `
   h1 { margin: 0 0 4px; font-size: 28px; } h2 { margin: 0 0 4px; font-size: 18px; } h3 { margin: 12px 0 6px; font-size: 15px; }
   .muted { color: #6b7280; margin: 0 0 10px; } .small { font-size: 12px; }
   .title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
-  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 40px; }
+  .toolbar { display: grid; gap: 10px; }
   .badges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .push-right { margin-left: auto; }
   .badge { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
   .badge.replay { background: #fef3c7; color: #92400e; }
   .demos { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .demos .muted { margin: 0; }
