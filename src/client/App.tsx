@@ -239,7 +239,7 @@ function Timeline({ state }: { state: RunState }) {
   // Keep the previous, current, and proposed experiments in view.
   useEffect(() => {
     const card = stripRef.current?.querySelector<HTMLElement>('[data-current="true"]');
-    card?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    card?.scrollIntoView({ block: "center", behavior: "smooth" });
   }, [currentId, state.experiments.length]);
 
   return (
@@ -573,8 +573,8 @@ const CSS = `
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
-  .strip { display: flex; gap: 10px; overflow-x: auto; padding: 8px 4px 12px; scroll-snap-type: x proximity; }
-  .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; scroll-snap-align: center; display: grid; gap: 3px; font-size: 13px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; }
+  .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; }
   .card.current { outline: 3px solid #111827; outline-offset: 2px; }
   .card.status-proposed { background: var(--proposed); } .card.status-running { background: var(--running); animation: pulse 1.2s infinite; }
   .card.status-success { background: var(--success); } .card.status-failure { background: var(--failure); } .card.status-error { background: var(--error); }
