@@ -106,6 +106,7 @@ app.post("/api/runs/:id/abort", async (c) => {
   return command(c, (run) => run.abort(String(body.reason ?? "Aborted by reviewer")));
 });
 
+app.use("/results/*", serveStatic({ root: "./" })); // the saved result files, so a reviewer can open them
 app.use("/*", serveStatic({ root: "./public" }));
 
 export default {

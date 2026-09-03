@@ -123,7 +123,17 @@ export function reduce(state: RunState, e: LabEvent): RunState {
     case "agent.retry_requested":
       return { ...state, agentError: null };
     case "run.completed":
-      return { ...state, result: { bestFlowRate: p.bestFlowRate, bestRmse: p.bestRmse, experiments: p.experiments } };
+      return {
+        ...state,
+        result: {
+          bestFlowRate: p.bestFlowRate,
+          bestRmse: p.bestRmse,
+          experiments: p.experiments,
+          confirmedBy: p.confirmedBy ?? [],
+          resultFile: p.resultFile ?? "",
+          resultJson: p.resultJson ?? "",
+        },
+      };
     case "run.aborted":
       return { ...state, abortReason: p.reason, pendingExperimentId: null };
     default:

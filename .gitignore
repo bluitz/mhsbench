@@ -36,3 +36,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # built browser bundle
 public/main.js
 public/main.js.map
+
+# saved run results
+results/

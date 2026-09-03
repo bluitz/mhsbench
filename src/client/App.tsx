@@ -95,6 +95,7 @@ export function App() {
       {runId && (
         <>
           <NowBanner state={state} runId={runId} disabled={replaying || ended} />
+          {state.result && <SavedResult result={state.result} />}
           <Timeline state={state} inspectedId={inspectedId} onInspect={setInspectedId} />
           <div className="columns">
             <HypothesisPanel
@@ -233,10 +234,30 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
       {faultText && <div className={`now-detail ${state.fault?.escalated ? "escalated" : "fault"}`}>{faultText}</div>}
       {state.result && (
         <div className="now-detail success">
-          Best flow rate {state.result.bestFlowRate} µL/s with RMSE {state.result.bestRmse} after {state.result.experiments} experiments.
+          Optimal flow rate confirmed: {state.result.bestFlowRate} µL/s (RMSE {state.result.bestRmse}) after {state.result.experiments} experiments.
+          Two successful experiments in a row ended the run. Parameters saved to {state.result.resultFile}.
         </div>
       )}
       {state.abortReason && <div className="now-detail error-box">{state.abortReason}</div>}
+    </section>
+  );
+}
+
+// ---------- Saved result: the JSON file written when two experiments succeed in a row ----------
+
+function SavedResult({ result }: { result: NonNullable<RunState["result"]> }) {
+  return (
+    <section className="panel result-panel">
+      <div className="title-row">
+        <div>
+          <h2>Saved result</h2>
+          <p className="muted">The confirmed parameters were written to a file on the server. This is that file, read back from disk.</p>
+        </div>
+        <a className="button secondary" href={`/${result.resultFile}`} target="_blank" rel="noreferrer">
+          Open {result.resultFile}
+        </a>
+      </div>
+      <pre className="json">{result.resultJson}</pre>
     </section>
   );
 }
@@ -267,18 +288,37 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
       <div className="strip" ref={stripRef}>
         {state.experiments.length === 0 && <div className="muted">No experiments yet.</div>}
         {state.experiments.map((x) => (
-          <ExperimentCard key={x.id} x={x} current={x.id === currentId} inspected={x.id === inspectedId} onClick={() => onInspect(x.id)} />
+          <ExperimentCard
+            key={x.id}
+            x={x}
+            current={x.id === currentId}
+            inspected={x.id === inspectedId}
+            confirmed={state.result?.confirmedBy.includes(x.id) ?? false}
+            onClick={() => onInspect(x.id)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function ExperimentCard({ x, current, inspected, onClick }: { x: ExperimentView; current: boolean; inspected: boolean; onClick: () => void }) {
+function ExperimentCard({
+  x,
+  current,
+  inspected,
+  confirmed,
+  onClick,
+}: {
+  x: ExperimentView;
+  current: boolean;
+  inspected: boolean;
+  confirmed: boolean;
+  onClick: () => void;
+}) {
   const p = x.proposal;
   return (
     <div
-      className={`card status-${x.status} ${current ? "current" : ""} ${inspected ? "inspected" : ""}`}
+      className={`card status-${x.status} ${current ? "current" : ""} ${inspected ? "inspected" : ""} ${confirmed ? "confirmed" : ""}`}
       data-current={current}
       role="button"
       tabIndex={0}
@@ -297,6 +337,7 @@ function ExperimentCard({ x, current, inspected, onClick }: { x: ExperimentView;
       {x.errorCode && <div className="card-line">Error {x.errorCode}</div>}
       {x.status === "rejected" && <div className="card-line">Rejected: {x.decisionReason}</div>}
       {x.escalation && <div className="card-line tag">Escalation</div>}
+      {confirmed && <div className="card-line tag gold">Confirmed optimum</div>}
     </div>
   );
 }
@@ -634,6 +675,10 @@ const CSS = `
   .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; }
   .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; cursor: pointer; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
+  .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }
+  .tag.gold { background: #facc15; color: #111827; }
+  .result-panel { border: 2px solid var(--success); }
+  .json { background: #f0fdf4; border-radius: 8px; padding: 12px; overflow-x: auto; font-size: 13px; margin: 0; }
   .card.current { outline: 3px solid #111827; outline-offset: 2px; }
   .card.status-proposed { background: var(--proposed); } .card.status-running { background: var(--running); animation: pulse 1.2s infinite; }
   .card.status-success { background: var(--success); } .card.status-failure { background: var(--failure); } .card.status-error { background: var(--error); }

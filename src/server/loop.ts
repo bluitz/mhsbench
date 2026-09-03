@@ -6,7 +6,7 @@
 import { FLUID_CARDS } from "../shared/fluids";
 import { fold } from "../shared/reducer";
 import { meanDeliveredOf, rmseOf } from "../shared/score";
-import type { ExperimentProposal, ExperimentStatus, ExperimentView, FluidCard, Proposal, RunState, Stage } from "../shared/types";
+import type { ExperimentProposal, ExperimentStatus, ExperimentView, FluidCard, RunState, Stage } from "../shared/types";
 import { MAX_EXPERIMENTS, MAX_FAULT_ATTEMPTS } from "../shared/types";
 import type { AgentContext, Agent } from "./agents/claude";
 import { ruleBasedReview } from "./agents/reviewer";
@@ -32,7 +32,6 @@ export async function runLoop(run: Run, agent: Agent, options: LoopOptions = { s
   const currentState = (): RunState => fold(run.id, run.fluidId, run.autoMode, run.events);
 
   run.emit("run_loop", "run.created", { fluidId: run.fluidId, autoMode: run.autoMode });
-  let concludeRejection: string | null = null;
   let proposalCount = 0;
 
   while (!run.aborted) {
@@ -42,25 +41,11 @@ export async function runLoop(run: Run, agent: Agent, options: LoopOptions = { s
     const escalated = faultActive && Boolean(state.fault?.escalated);
 
     stage("proposing");
-    const proposal = await proposeWithRetries(run, agent, buildContext(fluid, state, run, concludeRejection), options);
+    const proposal = await proposeWithRetries(run, agent, buildContext(fluid, state, run), options);
     if (run.aborted) break;
     if (!proposal) {
       stage("agent_error");
       await run.waitForRetry();
-      continue;
-    }
-    concludeRejection = null;
-
-    if (proposal.kind === "conclude") {
-      const verdict = checkConclusion(state, proposal.best_flow_rate_uL_per_s);
-      if (verdict.ok) {
-        run.emit("run_loop", "run.completed", { bestFlowRate: proposal.best_flow_rate_uL_per_s, bestRmse: verdict.bestRmse, experiments: state.experiments.length, rationale: proposal.rationale });
-        stage("complete");
-        run.ended = true;
-        return;
-      }
-      concludeRejection = verdict.reason;
-      run.emit("run_loop", "agent.conclude_rejected", { reason: verdict.reason });
       continue;
     }
 
@@ -102,13 +87,52 @@ export async function runLoop(run: Run, agent: Agent, options: LoopOptions = { s
     run.emit("run_loop", "experiment.completed", { status, rmse: outcome.rmse ?? null, meanDelivered: outcome.meanDelivered ?? null, readings: outcome.readings ?? null, errorCode: outcome.error ?? null, errorMessage: outcome.message ?? null }, experimentId);
 
     updateFaultBookkeeping(run, outcome, experimentId);
+
+    // Two successful experiments in a row confirm the optimum and end the run.
+    const measured = currentState().experiments.filter((x) => x.status !== "rejected");
+    const lastTwo = measured.slice(-2);
+    if (lastTwo.length === 2 && lastTwo.every((x) => x.status === "success")) {
+      await completeRun(run, fluid, lastTwo, measured.length);
+      stage("complete");
+      run.ended = true;
+      return;
+    }
     await options.sleep(INSTRUMENT_MS.betweenExperiments);
   }
 }
 
+/** Save the confirmed parameters to a JSON file, read the file back, and announce the result. */
+async function completeRun(run: Run, fluid: FluidCard, confirming: ExperimentView[], experimentCount: number) {
+  const best = confirming.reduce((a, b) => (a.rmse! <= b.rmse! ? a : b));
+  const result = {
+    run_id: run.id,
+    sample: fluid.name,
+    completed_at: new Date().toISOString(),
+    optimal_parameters: {
+      flow_rate_uL_per_s: best.proposal.flow_rate_uL_per_s,
+      mixing_cycles: best.proposal.mixing_cycles,
+    },
+    best_rmse: best.rmse,
+    assay_tolerance: fluid.tolerance,
+    confirmed_by_experiments: confirming.map((x) => ({ id: x.id, flow_rate_uL_per_s: x.proposal.flow_rate_uL_per_s, rmse: x.rmse })),
+    experiments_run: experimentCount,
+  };
+  const resultFile = `results/${run.id}.json`;
+  await Bun.write(resultFile, JSON.stringify(result, null, 2));
+  const resultJson = await Bun.file(resultFile).text();
+  run.emit("run_loop", "run.completed", {
+    bestFlowRate: best.proposal.flow_rate_uL_per_s,
+    bestRmse: best.rmse,
+    experiments: experimentCount,
+    confirmedBy: confirming.map((x) => x.id),
+    resultFile,
+    resultJson,
+  });
+}
+
 // ---------- Agent call with backoff ----------
 
-async function proposeWithRetries(run: Run, agent: Agent, context: AgentContext, options: LoopOptions): Promise<Proposal | null> {
+async function proposeWithRetries(run: Run, agent: Agent, context: AgentContext, options: LoopOptions): Promise<ExperimentProposal | null> {
   for (let attempt = 1; attempt <= BACKOFF_MS.length + 1; attempt++) {
     try {
       return await agent.propose(context);
@@ -129,7 +153,7 @@ async function proposeWithRetries(run: Run, agent: Agent, context: AgentContext,
 
 // ---------- Context the agent sees ----------
 
-function buildContext(fluid: FluidCard, state: RunState, run: Run, concludeRejection: string | null): AgentContext {
+function buildContext(fluid: FluidCard, state: RunState, run: Run): AgentContext {
   const driverErrors = run.events
     .filter((e) => e.type === "driver.error" || e.type === "driver.rejected")
     .slice(-3)
@@ -143,7 +167,6 @@ function buildContext(fluid: FluidCard, state: RunState, run: Run, concludeRejec
       ? { attempts: state.fault.attempts, maxAttempts: MAX_FAULT_ATTEMPTS, escalated: state.fault.escalated }
       : null,
     driverErrors,
-    concludeRejection,
   };
 }
 
@@ -232,29 +255,4 @@ function recordFaultAttempt(run: Run, state: RunState) {
     run.control.setHumanInLoop(true);
     run.emit("run_loop", "fault.escalated", { n });
   }
-}
-
-// ---------- Conclusion check ----------
-
-// To claim an optimum the agent must show it is a minimum: two successes there, and a nearby slower
-// and faster flow rate (10% to 60% away on each side) that both scored worse.
-const BRACKET_NEAR = 1.1;
-const BRACKET_FAR = 1.6;
-
-function checkConclusion(state: RunState, flowRate: number): { ok: true; bestRmse: number } | { ok: false; reason: string } {
-  const measured = state.experiments.filter((x) => x.status === "success" || x.status === "failure");
-  const flowOf = (x: ExperimentView) => x.proposal.flow_rate_uL_per_s;
-  const successesHere = measured.filter((x) => x.status === "success" && Math.abs(flowOf(x) - flowRate) / flowRate < 0.02);
-  if (successesHere.length < 2) {
-    return { ok: false, reason: `Need two successful experiments at ${flowRate} uL/s, found ${successesHere.length}.` };
-  }
-  const bestRmse = Math.min(...successesHere.map((x) => x.rmse!));
-  const worseWithin = (low: number, high: number) => measured.some((x) => flowOf(x) >= low && flowOf(x) <= high && x.rmse! > bestRmse);
-  const slowerIsWorse = worseWithin(flowRate / BRACKET_FAR, flowRate / BRACKET_NEAR);
-  const fasterIsWorse = worseWithin(flowRate * BRACKET_NEAR, flowRate * BRACKET_FAR);
-  if (!slowerIsWorse || !fasterIsWorse) {
-    const side = !slowerIsWorse ? "slower" : "faster";
-    return { ok: false, reason: `The optimum is not bracketed yet: run an experiment 10% to 60% ${side} than ${flowRate} uL/s to show it scores worse.` };
-  }
-  return { ok: true, bestRmse };
 }

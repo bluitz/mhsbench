@@ -68,7 +68,7 @@ Environment variables: `ANTHROPIC_API_KEY` (required), `ANTHROPIC_WORKSPACE_ID` 
 - **No scripted fallback agent.** A demo where a heuristic quietly stands in for the model would mislead the reviewer. Failure is shown, and a human restarts.
 - **Escalation cannot be dodged.** Rejected recovery proposals count toward the three attempts, and auto mode never approves an escalation.
 - **Idempotent decisions.** A decision is accepted only for the hypothesis that is actually waiting. A stale click cannot approve the wrong experiment.
-- **A bracketed optimum.** The agent may conclude only after two successes at the best flow rate and a nearby slower and faster experiment that both scored worse. That is honest lab practice, and it keeps a run at 10 or more experiments.
+- **Two successes in a row end the run.** The confirmed parameters are written to `results/<run id>.json`, read back from disk, and shown in the interface, so the outcome of a run is a plain file another tool can pick up.
 
 ## With more time
 

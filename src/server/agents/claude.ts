@@ -3,7 +3,7 @@
  * Claude chooses the parameters; the loop operates the instruments.
  */
 import Anthropic from "@anthropic-ai/sdk";
-import type { ExperimentView, FluidCard, Proposal } from "../../shared/types";
+import type { ExperimentProposal, ExperimentView, FluidCard } from "../../shared/types";
 
 export interface AgentContext {
   fluid: FluidCard;
@@ -12,11 +12,10 @@ export interface AgentContext {
   guidance: string[];
   fault: { attempts: number; maxAttempts: number; escalated: boolean } | null;
   driverErrors: string[];
-  concludeRejection: string | null;
 }
 
 export interface Agent {
-  propose(context: AgentContext): Promise<Proposal>;
+  propose(context: AgentContext): Promise<ExperimentProposal>;
 }
 
 const MODEL = process.env.AGENT_MODEL ?? "claude-sonnet-5";
@@ -54,13 +53,12 @@ ${manifest}
 
 How each experiment runs. The run loop takes your proposal and executes, in order: eject the tip if you asked to replace it; pick up a tip if none is attached (at the next rack position if you asked to retry the pickup); move to clean wells if you asked; write the flow rate; write the mixing cycles; transfer 100 uL into the 8 current wells; mix if mixing cycles is above 0; read absorbance. You then receive the RMSE and the mean delivered fraction, or the driver error that stopped the experiment.
 
-Strategy. First sweep at least six log-spaced flow rates spanning the whole allowed range, one per experiment. Then refine around the best result. You may conclude only when the optimum is proven: two successes at the best flow rate, plus one experiment between 10% and 60% slower and one between 10% and 60% faster that both scored worse. Do not repeat identical parameters more than twice. Wells are rinsed between experiments, so reuse the current wells and keep the tip unless something went wrong with them.
+Strategy. First sweep at least six log-spaced flow rates spanning the whole allowed range, one per experiment. Then refine around the best result. The run ends by itself after two successful experiments in a row, so once an experiment succeeds, repeat it to confirm. Do not repeat identical parameters more than twice. Wells are rinsed between experiments, so reuse the current wells and keep the tip unless something went wrong with them.
 
 Faults. Hardware fails. When a driver error or an under-delivery appears, deal with it before continuing the sweep. Read error codes carefully. A mean delivered fraction well below 1.0 that does not change with flow rate means the tip is under-delivering. If a human reviewer gives guidance, follow it for the rest of the run. When escalated, your proposal must include a diagnosis of why the previous attempts failed.
 
-Respond with only a JSON object and no other text, in one of these two shapes:
-{"kind":"experiment","flow_rate_uL_per_s":<number>,"mixing_cycles":<integer>,"tip":"keep"|"replace"|"retry_pickup_next_position","wells":"current"|"clean","rationale":"<one or two sentences>","diagnosis":"<only when escalated>"}
-{"kind":"conclude","best_flow_rate_uL_per_s":<number>,"rationale":"<one sentence>"}`;
+Respond with only a JSON object and no other text, in this shape:
+{"kind":"experiment","flow_rate_uL_per_s":<number>,"mixing_cycles":<integer>,"tip":"keep"|"replace"|"retry_pickup_next_position","wells":"current"|"clean","rationale":"<one or two sentences>","diagnosis":"<only when escalated>"}`;
 }
 
 function userPrompt(c: AgentContext): string {
@@ -84,7 +82,6 @@ function userPrompt(c: AgentContext): string {
   if (c.guidance.length) {
     lines.push("", "Guidance from the human reviewer (follow it for the rest of the run):", ...c.guidance.map((g) => `- ${g}`));
   }
-  if (c.concludeRejection) lines.push("", `Your previous conclusion was not accepted: ${c.concludeRejection}`);
   lines.push("", "Propose the next step as a JSON object.");
   return lines.join("\n");
 }
@@ -101,13 +98,9 @@ function describeExperiment(x: ExperimentView): string {
 }
 
 /** Turn Claude's reply into a typed proposal. Anything malformed is an error, which triggers a retry. */
-export function parseProposal(text: string): Proposal {
+export function parseProposal(text: string): ExperimentProposal {
   const json = text.replace(/```json|```/g, "").trim();
   const data = JSON.parse(json);
-  if (data.kind === "conclude") {
-    if (typeof data.best_flow_rate_uL_per_s !== "number") throw new Error("conclude proposal missing best_flow_rate_uL_per_s");
-    return { kind: "conclude", best_flow_rate_uL_per_s: data.best_flow_rate_uL_per_s, rationale: String(data.rationale ?? "") };
-  }
   if (data.kind === "experiment") {
     if (typeof data.flow_rate_uL_per_s !== "number") throw new Error("experiment proposal missing flow_rate_uL_per_s");
     const tip = ["keep", "replace", "retry_pickup_next_position"].includes(data.tip) ? data.tip : "keep";

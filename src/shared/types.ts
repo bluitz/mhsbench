@@ -41,13 +41,6 @@ export interface ExperimentProposal {
   diagnosis?: string;
 }
 
-export interface ConcludeProposal {
-  kind: "conclude";
-  best_flow_rate_uL_per_s: number;
-  rationale: string;
-}
-
-export type Proposal = ExperimentProposal | ConcludeProposal;
 
 export type Stage =
   | "reviewing_history"
@@ -140,7 +133,14 @@ export interface RunState {
   agentError: { error: string; attempts: number } | null;
   guidance: string[];
   devices: DeviceState;
-  result: { bestFlowRate: number; bestRmse: number; experiments: number } | null;
+  result: {
+    bestFlowRate: number;
+    bestRmse: number;
+    experiments: number;
+    confirmedBy: string[]; // the two consecutive successful experiments
+    resultFile: string;
+    resultJson: string; // the saved file, read back from disk
+  } | null;
   abortReason: string | null;
 }
 
