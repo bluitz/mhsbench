@@ -333,6 +333,8 @@ function SavedResult({ result, showFileLink }: { result: NonNullable<RunState["r
 function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspectedId: string | null; onInspect: (id: string) => void }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const currentId = state.pendingExperimentId ?? state.experiments.find((x) => x.status === "running")?.id ?? state.experiments.at(-1)?.id;
+  // Markers for an experiment that has not been proposed yet sit above a placeholder card.
+  const upcoming = state.markers.filter((m) => m.beforeIndex > state.experiments.length);
 
   // Bring the current experiment into view only if it has wrapped off screen; never yank a page that already shows it.
   useEffect(() => {
@@ -352,14 +354,17 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
         ))}
       </div>
       <div className="strip" ref={stripRef}>
-        {state.experiments.length === 0 && <div className="muted">No experiments yet.</div>}
+        {state.experiments.length === 0 && upcoming.length === 0 && <div className="muted">No experiments yet.</div>}
         {state.experiments.map((x) => (
           <div className="slot" key={x.id}>
-            {state.markers
-              .filter((m) => m.beforeIndex === x.index)
-              .map((m, i) => (
-                <Marker key={i} marker={m} />
-              ))}
+            {/* Every slot reserves the same space above its card, so a marker appearing never moves the row. */}
+            <div className="slot-markers">
+              {state.markers
+                .filter((m) => m.beforeIndex === x.index)
+                .map((m, i) => (
+                  <Marker key={i} marker={m} />
+                ))}
+            </div>
             <ExperimentCard
               x={x}
               current={x.id === currentId}
@@ -369,13 +374,16 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
             />
           </div>
         ))}
-        {state.markers
-          .filter((m) => m.beforeIndex > state.experiments.length)
-          .map((m, i) => (
-            <div className="slot" key={`pending-${i}`}>
-              <Marker marker={m} />
+        {upcoming.length > 0 && (
+          <div className="slot">
+            <div className="slot-markers">
+              {upcoming.map((m, i) => (
+                <Marker key={i} marker={m} />
+              ))}
             </div>
-          ))}
+            <div className="card ghost">Next experiment</div>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -777,9 +785,11 @@ const CSS = `
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
-  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 196px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 262px; }
   .slot { flex: 0 0 190px; display: grid; gap: 6px; }
-  .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
+  .slot-markers { min-height: 60px; display: grid; align-content: end; gap: 4px; }
+  .card.ghost { background: transparent; border: 2px dashed #9ca3af; color: #6b7280; display: grid; place-content: center; cursor: default; }
+  .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .marker.fault { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; }
   .marker.reviewer { background: #dcfce7; color: #166534; border: 1px solid #86efac; border-left: 5px solid #16a34a; }
   .marker.operator { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-left: 5px solid #d97706; }
