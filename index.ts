@@ -4,7 +4,7 @@ import { serveStatic } from 'hono/bun';
 const app = new Hono();
 
 app.get('/health', (c) => c.json({ ok: true }));
-app.get('/', (c) => c.text('hello world this is Justin'));
+app.get('/', (c) => c.text('hello world this is Justy'));
 
 export default {
   port: process.env.PORT || 3000,
