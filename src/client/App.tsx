@@ -182,14 +182,13 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
 
   return (
     <header className="panel">
-      <div className="title-row">
-        <div>
-          <h1>MHS Bench</h1>
-          <p className="muted">
-            A Claude agent finds the best liquid handler flow rate for a protein sample by running experiments on a simulated
-            bench. Inject faults, approve or reject its hypotheses, and watch it recover.
-          </p>
-        </div>
+      <h1>MHS Bench</h1>
+      <p className="muted">
+        A Claude agent finds the best liquid handler flow rate for a protein sample by running experiments on a simulated
+        bench. Inject faults, approve or reject its hypotheses, and watch it recover.
+      </p>
+      {/* Status badges on the left, actions anchored to the right so they never move when a badge appears. */}
+      <div className="toolbar">
         <div className="badges">
           {view && (
             <>
@@ -200,6 +199,8 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
               {replaying && <span className="badge replay">{demo ? "Replaying a recorded run" : "Replaying this run"}</span>}
             </>
           )}
+        </div>
+        <div className="actions">
           <DemoButtons activeName={view?.kind === "demo" ? view.name : null} />
           {view && (
             <a className="button secondary" href="#">
@@ -733,7 +734,9 @@ const CSS = `
   h1 { margin: 0 0 4px; font-size: 28px; } h2 { margin: 0 0 4px; font-size: 18px; } h3 { margin: 12px 0 6px; font-size: 15px; }
   .muted { color: #6b7280; margin: 0 0 10px; } .small { font-size: 12px; }
   .title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; min-height: 40px; }
   .badges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-left: auto; }
   .badge { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
   .badge.replay { background: #fef3c7; color: #92400e; }
   .demos { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .demos .muted { margin: 0; }
@@ -765,7 +768,7 @@ const CSS = `
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
-  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 150px; }
   .slot { display: grid; gap: 6px; }
   .fault-marker { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
   .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; cursor: pointer; }
