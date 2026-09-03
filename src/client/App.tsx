@@ -590,6 +590,7 @@ const CSS = `
   .edit-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
   .edit-grid label { display: grid; gap: 4px; font-size: 12px; color: #6b7280; }
   input, select { padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; width: 100%; }
+  input[type=checkbox], input[type=radio] { width: auto; padding: 0; }
   .reason { margin-top: 4px; }
   .guidance { background: #fffbeb; border: 1px solid #f59e0b; border-radius: 10px; padding: 12px; margin-bottom: 12px; }
   .devices { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
