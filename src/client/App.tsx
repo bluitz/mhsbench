@@ -233,7 +233,12 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
       )}
 
       {runId && <AutoModeToggle autoMode={state.autoMode} onChange={(v) => post(`/api/runs/${runId}/mode`, { auto_mode: v })} />}
-      {demo && <p className="muted demo-description">{demo.description}</p>}
+      {/* Always two lines tall: the demo's story, or the sample's description on a live run, so the header never resizes. */}
+      {view && (
+        <p className="muted context-line">
+          {demo ? demo.description : `${FLUID_CARDS[state.fluidId].character}. ${FLUID_CARDS[state.fluidId].description}`}
+        </p>
+      )}
     </header>
   );
 }
@@ -757,7 +762,7 @@ const CSS = `
   .badge { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
   .badge.replay { background: #fef3c7; color: #92400e; }
   .demos { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .demos .muted { margin: 0; }
-  .demo-description { margin: 8px 0 0; }
+  .context-line { margin: 8px 0 0; min-height: 44px; }
   .start-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 12px; }
   .sample-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .sample-card { display: grid; gap: 4px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; cursor: pointer; }
