@@ -359,18 +359,36 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
       <div className="strip" ref={stripRef}>
         {state.experiments.length === 0 && <div className="muted">No experiments yet.</div>}
         {state.experiments.map((x) => (
-          <ExperimentCard
-            key={x.id}
-            x={x}
-            current={x.id === currentId}
-            inspected={x.id === inspectedId}
-            confirmed={state.result?.confirmedBy.includes(x.id) ?? false}
-            onClick={() => onInspect(x.id)}
-          />
+          <div className="slot" key={x.id}>
+            {state.faultMarkers
+              .filter((m) => m.beforeIndex === x.index)
+              .map((m, i) => (
+                <FaultMarker key={i} kind={m.kind} />
+              ))}
+            <ExperimentCard
+              x={x}
+              current={x.id === currentId}
+              inspected={x.id === inspectedId}
+              confirmed={state.result?.confirmedBy.includes(x.id) ?? false}
+              onClick={() => onInspect(x.id)}
+            />
+          </div>
         ))}
+        {state.faultMarkers
+          .filter((m) => m.beforeIndex > state.experiments.length)
+          .map((m, i) => (
+            <div className="slot" key={`pending-${i}`}>
+              <FaultMarker kind={m.kind} />
+            </div>
+          ))}
       </div>
     </section>
   );
+}
+
+/** Red flag above the experiment a fault was injected before. */
+function FaultMarker({ kind }: { kind: FaultKind }) {
+  return <div className="fault-marker">Fault injected: {FAULT_DESCRIPTIONS[kind].title}</div>;
 }
 
 function ExperimentCard({
@@ -746,7 +764,9 @@ const CSS = `
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
-  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; }
+  .slot { display: grid; gap: 6px; }
+  .fault-marker { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
   .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; cursor: pointer; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }

@@ -129,6 +129,7 @@ export interface RunState {
   experiments: ExperimentView[];
   pendingExperimentId: string | null;
   fault: { kind: FaultKind; active: boolean; detected: boolean; attempts: number; escalated: boolean } | null;
+  faultMarkers: { kind: FaultKind; beforeIndex: number }[]; // each injection, placed before the first experiment it could affect
   retry: { attempt: number; maxAttempts: number; delayMs: number; error: string } | null;
   agentError: { error: string; attempts: number } | null;
   guidance: string[];

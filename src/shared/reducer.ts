@@ -32,6 +32,7 @@ export function initialState(runId: string, fluidId: FluidId, autoMode: boolean)
     experiments: [],
     pendingExperimentId: null,
     fault: null,
+    faultMarkers: [],
     retry: null,
     agentError: null,
     guidance: [],
@@ -104,8 +105,16 @@ export function reduce(state: RunState, e: LabEvent): RunState {
     case "driver.result":
     case "driver.error":
       return p.state ? { ...state, devices: p.state as DeviceState } : state;
-    case "fault.injected":
-      return { ...state, fault: { kind: p.fault as FaultKind, active: true, detected: false, attempts: 0, escalated: false } };
+    case "fault.injected": {
+      // The fault hits the first experiment that has not finished yet, or the next one to be proposed.
+      const unfinished = state.experiments.find((x) => x.status === "proposed" || x.status === "running");
+      const beforeIndex = unfinished ? unfinished.index : state.experiments.length + 1;
+      return {
+        ...state,
+        fault: { kind: p.fault as FaultKind, active: true, detected: false, attempts: 0, escalated: false },
+        faultMarkers: [...state.faultMarkers, { kind: p.fault as FaultKind, beforeIndex }],
+      };
+    }
     case "fault.detected":
       return state.fault ? { ...state, fault: { ...state.fault, detected: true } } : state;
     case "fault.attempt":
