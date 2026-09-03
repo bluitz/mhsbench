@@ -34,6 +34,7 @@ export function initialState(runId: string, fluidId: FluidId, autoMode: boolean)
     pendingExperimentId: null,
     fault: null,
     markers: [],
+    flowRateMax: 250,
     retry: null,
     agentError: null,
     guidance: [],
@@ -128,6 +129,12 @@ export function reduce(state: RunState, e: LabEvent): RunState {
       return state.fault ? { ...state, fault: { ...state.fault, escalated: true, attempts: p.n } } : state;
     case "fault.recovered":
       return state.fault ? { ...state, fault: { ...state.fault, active: false } } : state;
+    case "limit.changed": {
+      const unfinished = state.experiments.find((x) => x.status === "proposed" || x.status === "running");
+      const beforeIndex = unfinished ? unfinished.index : state.experiments.length + 1;
+      const marker: TimelineMarker = { tone: "operator", label: `Operator lowered the flow-rate limit to ${p.max} µL/s`, beforeIndex };
+      return { ...state, flowRateMax: p.max, markers: [...state.markers, marker] };
+    }
     case "guidance.provided": {
       // Guidance replaces whatever was pending, so the agent's response is the next experiment to be proposed.
       const marker: TimelineMarker = { tone: "reviewer", label: `Reviewer guidance: ${shortGuidance(p.text)}`, beforeIndex: state.experiments.length + 1 };

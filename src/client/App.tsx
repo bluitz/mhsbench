@@ -44,6 +44,7 @@ const DEMOS = [
   { name: "tip", title: "Failed tip pickup" },
   { name: "clog", title: "Clogged tip" },
   { name: "bubbles", title: "Bubbles in the wells" },
+  { name: "limit", title: "Driver rejects an unsafe request" },
 ];
 
 function viewFromHash(): View {
@@ -420,7 +421,7 @@ function ExperimentCard({
       {p.tip !== "keep" && <div className="card-line">Tip: {p.tip.replaceAll("_", " ")}</div>}
       {p.wells === "clean" && <div className="card-line">Moves to clean wells</div>}
       {x.rmse !== undefined && x.rmse !== null && <div className="card-line">RMSE {x.rmse}</div>}
-      {x.errorCode && <div className="card-line">Error {x.errorCode}</div>}
+      {x.errorCode && <div className="card-line">{x.errorCode === "DRIVER_REJECTED" ? "Refused by the driver" : `Error ${x.errorCode}`}</div>}
       {x.status === "rejected" && <div className="card-line">Rejected: {x.decisionReason}</div>}
       {x.escalation && <div className="card-line tag">Escalation</div>}
       {confirmed && <div className="card-line tag gold">Confirmed optimum</div>}
@@ -617,6 +618,7 @@ function Instruments({ state, runId, disabled }: { state: RunState; runId: strin
               <tr><td>Tip attached</td><td>{lh.tip_attached ? "yes" : "no"} (rack position {lh.tip_position})</td></tr>
               <tr><td>Current wells</td><td>{lh.current_wells}</td></tr>
               <tr><td>Flow rate</td><td>{lh.flow_rate_uL_per_s} µL/s</td></tr>
+              <tr><td>Flow-rate limit</td><td>5 to {state.flowRateMax} µL/s{state.flowRateMax < 250 ? " (lowered by the operator)" : ""}</td></tr>
               <tr><td>Mixing cycles</td><td>{lh.mixing_cycles}</td></tr>
               <tr><td>Last dispensed</td><td>{lh.last_dispensed_volume_uL ?? "–"} µL of 100</td></tr>
             </tbody>
@@ -649,6 +651,19 @@ function Instruments({ state, runId, disabled }: { state: RunState; runId: strin
             <small>{FAULT_DESCRIPTIONS[kind].description}</small>
           </button>
         ))}
+      </div>
+
+      <h3>Change a safety limit</h3>
+      <p className="muted">The driver enforces the new limit at once. The agent's reference text still says 250, so its next high proposal is refused by the driver and never reaches the device.</p>
+      <div className="fault-buttons">
+        <button
+          className="button fault operator"
+          disabled={disabled || state.flowRateMax <= 100}
+          onClick={() => post(`/api/runs/${runId}/limits`, { flow_rate_max: 100 })}
+        >
+          <strong>Lower the flow-rate limit to 100 µL/s</strong>
+          <small>{state.flowRateMax <= 100 ? "Already lowered for this run." : "An operator tightens the interlock on the liquid handler."}</small>
+        </button>
       </div>
     </section>
   );
@@ -769,6 +784,8 @@ const CSS = `
   .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
   .marker.fault { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; }
   .marker.reviewer { background: #dcfce7; color: #166534; border: 1px solid #86efac; border-left: 5px solid #16a34a; }
+  .marker.operator { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; border-left: 5px solid #d97706; }
+  .button.fault.operator { background: #fffbeb; border-color: #fcd34d; }
   .card { width: 100%; height: 176px; overflow: hidden; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; align-content: start; font-size: 13px; cursor: pointer; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }

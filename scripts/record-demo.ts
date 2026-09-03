@@ -2,28 +2,37 @@
  * Record a demo: run one fault scenario against a running server, in auto mode, and save its whole
  * event log as a fixture the browser can replay with no server and no model.
  *
- * Usage: bun scripts/record-demo.ts tip|clog|bubbles [http://localhost:3111]
+ * Usage: bun scripts/record-demo.ts tip|clog|bubbles|limit [http://localhost:3111]
  */
 import type { FaultKind, FluidId, LabEvent } from "../src/shared/types";
 
-const DEMOS: Record<string, { fluid: FluidId; fault: FaultKind; title: string; description: string }> = {
+// What the human at the bench does after the sweep gets going: inject a fault, or lower a safety limit.
+type BenchAction = { fault: FaultKind } | { flowRateMax: number };
+
+const DEMOS: Record<string, { fluid: FluidId; action: BenchAction; title: string; description: string }> = {
   tip: {
     fluid: "water",
-    fault: "tip_pickup_failed",
+    action: { fault: "tip_pickup_failed" },
     title: "Failed tip pickup",
     description: "The liquid handler fails to seat a tip. Watch the agent read the error and reason that retrying at the next rack position will fix it.",
   },
   clog: {
     fluid: "bsa",
-    fault: "clogged_tip",
+    action: { fault: "clogged_tip" },
     title: "Clogged tip",
     description: "The tip silently delivers half the volume. Watch the agent notice that the delivered amount stays the same even as the flow rate changes, and replace the tip.",
   },
   bubbles: {
     fluid: "bsa",
-    fault: "bubbles",
+    action: { fault: "bubbles" },
     title: "Bubbles in the wells",
     description: "Every transfer fails with a fluid detection error. The agent cannot fix it alone: after three attempts it escalates, a human explains the physics, and it recovers.",
+  },
+  limit: {
+    fluid: "bsa",
+    action: { flowRateMax: 100 },
+    title: "Driver rejects an unsafe request",
+    description: "An operator lowers the flow-rate limit to 100 µL/s mid-run. The agent's reference still says 250, so its next high proposal is refused by the driver and never reaches the device. Watch the agent read the rejection and continue within the new limit.",
   },
 };
 
@@ -34,7 +43,7 @@ const name = process.argv[2] ?? "";
 const base = process.argv[3] ?? "http://localhost:3111";
 const demo = DEMOS[name];
 if (!demo) {
-  console.error("usage: bun scripts/record-demo.ts tip|clog|bubbles [base url]");
+  console.error("usage: bun scripts/record-demo.ts tip|clog|bubbles|limit [base url]");
   process.exit(1);
 }
 
@@ -75,8 +84,13 @@ while (true) {
       completedExperiments += 1;
       if (completedExperiments === INJECT_AFTER_EXPERIMENTS && !injected) {
         injected = true;
-        console.log(`injecting ${demo.fault} after experiment ${completedExperiments}`);
-        await post(`/api/runs/${run_id}/faults`, { fault: demo.fault });
+        if ("fault" in demo.action) {
+          console.log(`injecting ${demo.action.fault} after experiment ${completedExperiments}`);
+          await post(`/api/runs/${run_id}/faults`, { fault: demo.action.fault });
+        } else {
+          console.log(`lowering the flow-rate limit to ${demo.action.flowRateMax} after experiment ${completedExperiments}`);
+          await post(`/api/runs/${run_id}/limits`, { flow_rate_max: demo.action.flowRateMax });
+        }
       }
     }
 

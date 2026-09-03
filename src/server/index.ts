@@ -94,6 +94,13 @@ app.post("/api/runs/:id/faults", async (c) => {
   return command(c, (run) => run.injectFault(fault));
 });
 
+app.post("/api/runs/:id/limits", async (c) => {
+  const body = await c.req.json();
+  const max = Number(body.flow_rate_max);
+  if (!(max > 5 && max <= 250)) return c.json({ ok: false, error: "flow_rate_max must be between 5 and 250" }, 400);
+  return command(c, (run) => run.setFlowRateLimit(max));
+});
+
 app.post("/api/runs/:id/mode", async (c) => {
   const body = await c.req.json();
   return command(c, (run) => run.setAutoMode(Boolean(body.auto_mode)));

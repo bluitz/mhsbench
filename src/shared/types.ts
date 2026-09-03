@@ -37,7 +37,7 @@ export const GUIDANCE_PRESETS = [
 
 /** A flag shown above an experiment card: a fault was injected, or the reviewer stepped in. */
 export interface TimelineMarker {
-  tone: "fault" | "reviewer";
+  tone: "fault" | "reviewer" | "operator";
   label: string;
   beforeIndex: number; // the experiment it sits above
 }
@@ -144,6 +144,7 @@ export interface RunState {
   pendingExperimentId: string | null;
   fault: { kind: FaultKind; active: boolean; detected: boolean; attempts: number; escalated: boolean } | null;
   markers: TimelineMarker[];
+  flowRateMax: number; // the live driver limit; the manifest says 250 but an operator may lower it
   retry: { attempt: number; maxAttempts: number; delayMs: number; error: string } | null;
   agentError: { error: string; attempts: number } | null;
   guidance: string[];

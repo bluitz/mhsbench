@@ -122,6 +122,13 @@ export class Run {
     return { ok: true, seq: event.seq };
   }
 
+  /** The operator tightens a safety limit on the bench. The driver enforces it from the next write on. */
+  setFlowRateLimit(max: number): CommandResult {
+    this.driver.setLimit("flow_rate_uL_per_s", max);
+    const event = this.emit("reviewer", "limit.changed", { tag: "flow_rate_uL_per_s", max });
+    return { ok: true, seq: event.seq };
+  }
+
   setAutoMode(autoMode: boolean): CommandResult {
     this.autoMode = autoMode;
     const event = this.emit("reviewer", "run.mode_changed", { autoMode });

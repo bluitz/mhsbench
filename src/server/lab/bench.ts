@@ -265,22 +265,38 @@ export interface CommandRecord {
 
 /** The only object that holds a reference to the simulator. Enforces the manifest before anything reaches the bench. */
 export class Driver {
+  // Live limits start from the manifest. An operator can tighten one during a run; the agent's reference text does not change.
+  private limits = new Map<string, { min: number; max: number; changedByOperator: boolean }>();
+
   constructor(
     private bench: Simulator,
     private onCommand: (record: CommandRecord) => void,
-  ) {}
+  ) {
+    for (const entry of [...LIQUID_HANDLER_MANIFEST, ...PLATE_READER_MANIFEST]) {
+      if (entry.kind === "write") this.limits.set(entry.name, { min: entry.min!, max: entry.max!, changedByOperator: false });
+    }
+  }
+
+  setLimit(tag: string, max: number): void {
+    const limit = this.limits.get(tag);
+    if (!limit) return;
+    limit.max = max;
+    limit.changedByOperator = true;
+  }
 
   snapshot(): DeviceState {
     return this.bench.snapshot();
   }
 
   write(device: Device, tag: string, value: number): DriverResult {
-    const entry = this.manifest(device).find((e) => e.kind === "write" && e.name === tag);
+    const known = this.manifest(device).some((e) => e.kind === "write" && e.name === tag);
+    const limit = this.limits.get(tag);
     let result: DriverResult;
-    if (!entry) {
+    if (!known || !limit) {
       result = this.reject(`No writable tag named ${tag}.`);
-    } else if (!Number.isFinite(value) || value < entry.min! || value > entry.max!) {
-      result = this.reject(`${tag}=${value} is outside the allowed range ${entry.min} to ${entry.max}. Not sent to the device.`);
+    } else if (!Number.isFinite(value) || value < limit.min || value > limit.max) {
+      const note = limit.changedByOperator ? " (the operator lowered the limit during this run)" : "";
+      result = this.reject(`${tag}=${value} is outside the allowed range ${limit.min} to ${limit.max}${note}. Not sent to the device.`);
     } else {
       result = this.send({ device, action: "write", params: { tag, value } });
     }
