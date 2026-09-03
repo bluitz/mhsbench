@@ -200,7 +200,7 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
               {replaying && <span className="badge replay">{demo ? "Replaying a recorded run" : "Replaying this run"}</span>}
             </>
           )}
-          <DemoButtons />
+          <DemoButtons activeName={view?.kind === "demo" ? view.name : null} />
           {view && (
             <a className="button secondary" href="#">
               New run
@@ -242,13 +242,13 @@ function Header({ view, state, demo, replaying }: { view: View; state: RunState;
   );
 }
 
-/** Three recorded runs, one per fault, replayed in the browser with no model in the loop. */
-function DemoButtons() {
+/** Three recorded runs, one per fault, replayed in the browser with no model in the loop. The one playing stays highlighted. */
+function DemoButtons({ activeName }: { activeName: string | null }) {
   return (
     <div className="demos">
       <span className="muted">Watch a demo:</span>
       {DEMOS.map((d) => (
-        <a key={d.name} className="button demo" href={`#demo=${d.name}`}>
+        <a key={d.name} className={`button demo ${d.name === activeName ? "active" : ""}`} href={`#demo=${d.name}`}>
           Demo: {d.title}
         </a>
       ))}
@@ -750,6 +750,7 @@ const CSS = `
   .button.primary { background: var(--proposed); color: white; } .button.danger { background: var(--error); color: white; }
   .button.secondary { background: #e5e7eb; } .button.large { font-size: 18px; padding: 14px 22px; margin-top: 8px; }
   .button.demo { background: #6d28d9; color: white; }
+  .button.demo.active { background: #3b0764; outline: 3px solid #c4b5fd; outline-offset: 2px; }
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; }
   .now-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }
