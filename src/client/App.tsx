@@ -768,10 +768,10 @@ const CSS = `
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
-  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 150px; }
-  .slot { display: grid; gap: 6px; }
+  .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 196px; }
+  .slot { flex: 0 0 190px; display: grid; gap: 6px; }
   .fault-marker { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
-  .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; cursor: pointer; }
+  .card { width: 100%; height: 176px; overflow: hidden; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; align-content: start; font-size: 13px; cursor: pointer; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }
   .tag.gold { background: #facc15; color: #111827; }
@@ -782,7 +782,7 @@ const CSS = `
   .card.status-success { background: var(--success); } .card.status-failure { background: var(--failure); } .card.status-error { background: var(--error); }
   .card.status-rejected { background: var(--rejected); opacity: 0.85; }
   .card-head { display: flex; justify-content: space-between; font-weight: 600; } .status-label { text-transform: uppercase; font-size: 11px; }
-  .card-big { font-size: 22px; font-weight: 700; } .card-line { opacity: 0.95; }
+  .card-big { font-size: 22px; font-weight: 700; } .card-line { opacity: 0.95; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tag { display: inline-block; background: #111827; color: white; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin-bottom: 6px; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
   .columns { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 16px; }
