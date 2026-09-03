@@ -17,6 +17,7 @@ Live: https://mhsbench-production.up.railway.app
 5. Watch the fault attempt counter. After three failed recovery attempts the run escalates and a human must approve every step until the fault is cleared. Preset guidance buttons let you tell the agent what is physically wrong.
 6. If the Claude API keeps failing for about a minute, the run pauses with the error and a Retry button. There is no hidden fallback: the agent is Claude or nothing.
 7. Replay any run from its event log.
+8. Watch a demo: three recorded runs, one per fault, replay in the browser with no server and no model in the loop. The replay lingers on each hypothesis so the agent's reasoning can be read.
 
 ## How it works
 
@@ -48,6 +49,13 @@ BSA: ideal 10 µL/s, floor 0.181, k 0.15. Those are the Genentech pilot's number
 
 The bubbles rule is deliberate. In the pilot, Claude kept retrying in the same well and needed a person to explain
 the physics. Here nothing clears bubbles before the third attempt escalates to a human.
+
+## Demos
+
+`public/demos/*.json` are real runs recorded once with `bun scripts/record-demo.ts tip|clog|bubbles` against a running
+server. The script starts a run in auto mode, injects the fault after the third experiment, plays the human when the run
+escalates (guidance for bubbles, approval otherwise), and saves the whole event log. The browser replays a fixture through
+the same reducer as a live run, so the demo is the product, not a mock-up.
 
 ## Running it locally
 

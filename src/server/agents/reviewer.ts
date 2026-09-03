@@ -14,8 +14,9 @@ export function ruleBasedReview(p: ExperimentProposal, state: RunState): { accep
     return { accept: false, reason: "Outside the driver's allowed range." };
   }
 
+  // Only experiments that produced a measurement count as repeats; an errored one never ran.
   const repeats = state.experiments.filter(
-    (x) => x.status !== "rejected" && x.proposal.flow_rate_uL_per_s === p.flow_rate_uL_per_s && x.proposal.mixing_cycles === p.mixing_cycles,
+    (x) => (x.status === "success" || x.status === "failure") && x.proposal.flow_rate_uL_per_s === p.flow_rate_uL_per_s && x.proposal.mixing_cycles === p.mixing_cycles,
   );
   if (repeats.length >= 2) {
     return { accept: false, reason: "These exact parameters have already been run twice." };

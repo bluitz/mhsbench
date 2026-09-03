@@ -34,34 +34,63 @@ async function post(path: string, body: unknown = {}) {
   return data;
 }
 
-function runIdFromHash(): string | null {
-  const match = window.location.hash.match(/run=([a-z0-9-]+)/);
-  return match ? match[1]! : null;
+type View = { kind: "run"; id: string } | { kind: "demo"; name: string } | null;
+
+/** A recorded run, saved by scripts/record-demo.ts, that the browser replays without a server or a model. */
+interface DemoFixture {
+  name: string;
+  title: string;
+  description: string;
+  events: LabEvent[];
+}
+
+const DEMOS = [
+  { name: "tip", title: "Failed tip pickup" },
+  { name: "clog", title: "Clogged tip" },
+  { name: "bubbles", title: "Bubbles in the wells" },
+];
+
+function viewFromHash(): View {
+  const run = window.location.hash.match(/run=([a-z0-9-]+)/);
+  if (run) return { kind: "run", id: run[1]! };
+  const demo = window.location.hash.match(/demo=([a-z]+)/);
+  if (demo) return { kind: "demo", name: demo[1]! };
+  return null;
+}
+
+/** How long a replay lingers after an event: long enough to read the agent's reasoning, quick through driver chatter. */
+function replayDelay(lastShown: LabEvent | undefined): number {
+  if (!lastShown) return REPLAY_STEP_MS;
+  if (lastShown.type === "hypothesis.proposed") return 2500;
+  if (lastShown.type === "experiment.completed" || lastShown.type.startsWith("fault.") || lastShown.type === "guidance.provided") return 1200;
+  return 150;
 }
 
 // ---------- App ----------
 
 export function App() {
-  const [runId, setRunId] = useState<string | null>(runIdFromHash);
+  const [view, setView] = useState<View>(viewFromHash);
   const [events, setEvents] = useState<LabEvent[]>([]);
+  const [demo, setDemo] = useState<DemoFixture | null>(null);
   const [replayCount, setReplayCount] = useState<number | null>(null); // null = live, otherwise how many events are shown
   const [inspectedId, setInspectedId] = useState<string | null>(null); // an experiment card clicked to view its hypothesis
 
-  // Follow the URL hash so a page reload, or a second tab, lands on its own run.
+  // Follow the URL hash: #run=<id> is a live run, #demo=<name> is a recorded one. A second tab gets its own.
   useEffect(() => {
     const onHash = () => {
-      setRunId(runIdFromHash());
+      setView(viewFromHash());
       setEvents([]);
+      setDemo(null);
       setReplayCount(null);
     };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  // One Server-Sent Events connection per run. The browser reconnects and resumes by itself.
+  // Live run: one Server-Sent Events connection. The browser reconnects and resumes by itself.
   useEffect(() => {
-    if (!runId) return;
-    const source = new EventSource(`/api/runs/${runId}/events`);
+    if (view?.kind !== "run") return;
+    const source = new EventSource(`/api/runs/${view.id}/events`);
     source.addEventListener("lab", (message) => {
       const event = JSON.parse((message as MessageEvent).data) as LabEvent;
       setEvents((prev) => (prev.length && event.seq <= prev[prev.length - 1]!.seq ? prev : [...prev, event]));
@@ -70,19 +99,39 @@ export function App() {
       if (stage === "complete" || stage === "aborted") source.close();
     });
     return () => source.close();
-  }, [runId]);
+  }, [view]);
 
-  // Replay: reveal one more event every few hundred milliseconds.
+  // Demo: load the recorded event log and replay it from the start.
+  useEffect(() => {
+    if (view?.kind !== "demo") return;
+    let cancelled = false;
+    fetch(`/demos/${view.name}.json`)
+      .then((response) => response.json())
+      .then((fixture: DemoFixture) => {
+        if (cancelled) return;
+        setDemo(fixture);
+        setEvents(fixture.events);
+        setReplayCount(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [view]);
+
+  // Replay: reveal events one at a time, lingering on the ones worth reading.
   useEffect(() => {
     if (replayCount === null || replayCount >= events.length) return;
-    const timer = setTimeout(() => setReplayCount(replayCount + 1), REPLAY_STEP_MS);
+    const timer = setTimeout(() => setReplayCount(replayCount + 1), replayDelay(events[replayCount - 1]));
     return () => clearTimeout(timer);
   }, [replayCount, events.length]);
 
   const visibleEvents = replayCount === null ? events : events.slice(0, replayCount);
-  const state = useMemo(() => fold(runId ?? "", "water", false, visibleEvents), [runId, visibleEvents]);
+  const runId = view?.kind === "run" ? view.id : "";
+  const isDemo = view?.kind === "demo";
+  const state = useMemo(() => fold(runId, "water", false, visibleEvents), [runId, visibleEvents]);
   const replaying = replayCount !== null;
   const ended = state.stage === "complete" || state.stage === "aborted";
+  const disabled = replaying || ended || isDemo; // nothing can be changed while replaying, in a demo, or after the end
   const inspected = state.experiments.find((x) => x.id === inspectedId) ?? null;
 
   // A new hypothesis takes over the panel, so an old card being inspected does not get stuck there.
@@ -91,26 +140,27 @@ export function App() {
   return (
     <div className="page">
       <style>{CSS}</style>
-      <Header runId={runId} state={state} replaying={replaying} />
-      {runId && (
+      <Header view={view} state={state} demo={demo} replaying={replaying} />
+      {view && (
         <>
-          <NowBanner state={state} runId={runId} disabled={replaying || ended} />
-          {state.result && <SavedResult result={state.result} />}
+          <NowBanner state={state} runId={runId} disabled={disabled} />
+          {state.result && <SavedResult result={state.result} showFileLink={!isDemo} />}
           <Timeline state={state} inspectedId={inspectedId} onInspect={setInspectedId} />
           <div className="columns">
             <HypothesisPanel
               state={state}
               runId={runId}
-              disabled={replaying || ended}
+              disabled={disabled}
               inspected={inspected}
               onCloseInspect={() => setInspectedId(null)}
             />
-            <Instruments state={state} runId={runId} disabled={replaying || ended} />
+            <Instruments state={state} runId={runId} disabled={disabled} />
           </div>
           <EventLog
             events={visibleEvents}
             replaying={replaying}
-            onReplay={() => setReplayCount(replaying ? null : 0)}
+            isDemo={isDemo}
+            onReplay={() => setReplayCount(isDemo ? 0 : replaying ? null : 0)}
           />
         </>
       )}
@@ -120,9 +170,10 @@ export function App() {
 
 // ---------- Header: pick a sample and start, or show the running sample ----------
 
-function Header({ runId, state, replaying }: { runId: string | null; state: RunState; replaying: boolean }) {
+function Header({ view, state, demo, replaying }: { view: View; state: RunState; demo: DemoFixture | null; replaying: boolean }) {
   const [fluidId, setFluidId] = useState<FluidId>("bsa");
   const [autoMode, setAutoMode] = useState(true); // new runs start in auto mode
+  const runId = view?.kind === "run" ? view.id : null;
 
   async function start() {
     const data = await post("/api/runs", { protein_id: fluidId, auto_mode: autoMode });
@@ -139,21 +190,26 @@ function Header({ runId, state, replaying }: { runId: string | null; state: RunS
             bench. Inject faults, approve or reject its hypotheses, and watch it recover.
           </p>
         </div>
-        {runId && (
-          <div className="badges">
-            <span className="badge">Sample: {FLUID_CARDS[state.fluidId].name}</span>
-            <span className="badge" title="Claude reads the experiments so far and proposes the next flow rate, mixing cycles, tip action and wells as one JSON hypothesis.">
-              Agent: Claude
-            </span>
-            {replaying && <span className="badge replay">Replaying this run</span>}
+        <div className="badges">
+          {view && (
+            <>
+              <span className="badge">{demo ? `Demo: ${demo.title}` : `Sample: ${FLUID_CARDS[state.fluidId].name}`}</span>
+              <span className="badge" title="Claude reads the experiments so far and proposes the next flow rate, mixing cycles, tip action and wells as one JSON hypothesis.">
+                Agent: Claude
+              </span>
+              {replaying && <span className="badge replay">{demo ? "Replaying a recorded run" : "Replaying this run"}</span>}
+            </>
+          )}
+          <DemoButtons />
+          {view && (
             <a className="button secondary" href="#">
               New run
             </a>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {!runId && (
+      {!view && (
         <div className="start-row">
           <div>
             <h2>1. Choose a sample</h2>
@@ -180,10 +236,23 @@ function Header({ runId, state, replaying }: { runId: string | null; state: RunS
         </div>
       )}
 
-      {runId && (
-        <AutoModeToggle autoMode={state.autoMode} onChange={(v) => post(`/api/runs/${runId}/mode`, { auto_mode: v })} />
-      )}
+      {runId && <AutoModeToggle autoMode={state.autoMode} onChange={(v) => post(`/api/runs/${runId}/mode`, { auto_mode: v })} />}
+      {demo && <p className="muted demo-description">{demo.description}</p>}
     </header>
+  );
+}
+
+/** Three recorded runs, one per fault, replayed in the browser with no model in the loop. */
+function DemoButtons() {
+  return (
+    <div className="demos">
+      <span className="muted">Watch a demo:</span>
+      {DEMOS.map((d) => (
+        <a key={d.name} className="button secondary" href={`#demo=${d.name}`}>
+          {d.title}
+        </a>
+      ))}
+    </div>
   );
 }
 
@@ -245,7 +314,7 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
 
 // ---------- Saved result: the JSON file written when two experiments succeed in a row ----------
 
-function SavedResult({ result }: { result: NonNullable<RunState["result"]> }) {
+function SavedResult({ result, showFileLink }: { result: NonNullable<RunState["result"]>; showFileLink: boolean }) {
   return (
     <section className="panel result-panel">
       <div className="title-row">
@@ -253,9 +322,11 @@ function SavedResult({ result }: { result: NonNullable<RunState["result"]> }) {
           <h2>Saved result</h2>
           <p className="muted">The confirmed parameters were written to a file on the server. This is that file, read back from disk.</p>
         </div>
-        <a className="button secondary" href={`/${result.resultFile}`} target="_blank" rel="noreferrer">
-          Open {result.resultFile}
-        </a>
+        {showFileLink && (
+          <a className="button secondary" href={`/${result.resultFile}`} target="_blank" rel="noreferrer">
+            Open {result.resultFile}
+          </a>
+        )}
       </div>
       <pre className="json">{result.resultJson}</pre>
     </section>
@@ -570,7 +641,7 @@ function Instruments({ state, runId, disabled }: { state: RunState; runId: strin
 
 // ---------- Event log ----------
 
-function EventLog({ events, replaying, onReplay }: { events: LabEvent[]; replaying: boolean; onReplay: () => void }) {
+function EventLog({ events, replaying, isDemo, onReplay }: { events: LabEvent[]; replaying: boolean; isDemo: boolean; onReplay: () => void }) {
   return (
     <section className="panel">
       <div className="title-row">
@@ -579,7 +650,7 @@ function EventLog({ events, replaying, onReplay }: { events: LabEvent[]; replayi
           <p className="muted">Every event in this run, newest first. The whole screen is computed from this list.</p>
         </div>
         <button className="button secondary" onClick={onReplay}>
-          {replaying ? "Stop replay and return to live" : "Replay this run"}
+          {isDemo ? "Restart demo" : replaying ? "Stop replay and return to live" : "Replay this run"}
         </button>
       </div>
       <div className="log">
@@ -647,6 +718,8 @@ const CSS = `
   .badges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .badge { background: #eef2ff; color: #3730a3; padding: 6px 10px; border-radius: 999px; font-size: 13px; }
   .badge.replay { background: #fef3c7; color: #92400e; }
+  .demos { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .demos .muted { margin: 0; }
+  .demo-description { margin: 8px 0 0; }
   .start-row { display: grid; grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 12px; }
   .sample-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
   .sample-card { display: grid; gap: 4px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 10px; cursor: pointer; }
