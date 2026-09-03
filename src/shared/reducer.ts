@@ -7,8 +7,9 @@ import type {
   LabEvent,
   RunState,
   Stage,
+  TimelineMarker,
 } from "./types";
-import { MAX_FAULT_ATTEMPTS } from "./types";
+import { FAULT_DESCRIPTIONS, GUIDANCE_PRESETS, MAX_FAULT_ATTEMPTS } from "./types";
 
 const EMPTY_DEVICES: DeviceState = {
   liquid_handler: {
@@ -32,7 +33,7 @@ export function initialState(runId: string, fluidId: FluidId, autoMode: boolean)
     experiments: [],
     pendingExperimentId: null,
     fault: null,
-    faultMarkers: [],
+    markers: [],
     retry: null,
     agentError: null,
     guidance: [],
@@ -73,9 +74,12 @@ export function reduce(state: RunState, e: LabEvent): RunState {
       const x = exp(e.experimentId);
       if (!x) return state;
       const merged = { ...x.proposal, ...(p.edits ?? {}) };
+      // A human changing the numbers is the reviewer stepping in, so it gets a marker above that card.
+      const edited: TimelineMarker[] = p.edits ? [{ tone: "reviewer", label: `Reviewer edited: ${describeEdits(p.edits)}`, beforeIndex: x.index }] : [];
       return {
         ...updateExp(x.id, { proposal: merged, decidedBy: p.by, edits: p.edits, decisionReason: p.reason }),
         pendingExperimentId: null,
+        markers: [...state.markers, ...edited],
       };
     }
     case "hypothesis.rejected": {
@@ -109,10 +113,11 @@ export function reduce(state: RunState, e: LabEvent): RunState {
       // The fault hits the first experiment that has not finished yet, or the next one to be proposed.
       const unfinished = state.experiments.find((x) => x.status === "proposed" || x.status === "running");
       const beforeIndex = unfinished ? unfinished.index : state.experiments.length + 1;
+      const marker: TimelineMarker = { tone: "fault", label: `Fault injected: ${FAULT_DESCRIPTIONS[p.fault as FaultKind].title}`, beforeIndex };
       return {
         ...state,
         fault: { kind: p.fault as FaultKind, active: true, detected: false, attempts: 0, escalated: false },
-        faultMarkers: [...state.faultMarkers, { kind: p.fault as FaultKind, beforeIndex }],
+        markers: [...state.markers, marker],
       };
     }
     case "fault.detected":
@@ -123,8 +128,11 @@ export function reduce(state: RunState, e: LabEvent): RunState {
       return state.fault ? { ...state, fault: { ...state.fault, escalated: true, attempts: p.n } } : state;
     case "fault.recovered":
       return state.fault ? { ...state, fault: { ...state.fault, active: false } } : state;
-    case "guidance.provided":
-      return { ...state, guidance: [...state.guidance, p.text] };
+    case "guidance.provided": {
+      // Guidance replaces whatever was pending, so the agent's response is the next experiment to be proposed.
+      const marker: TimelineMarker = { tone: "reviewer", label: `Reviewer guidance: ${shortGuidance(p.text)}`, beforeIndex: state.experiments.length + 1 };
+      return { ...state, guidance: [...state.guidance, p.text], markers: [...state.markers, marker] };
+    }
     case "agent.api_retry":
       return { ...state, retry: { attempt: p.attempt, maxAttempts: p.maxAttempts, delayMs: p.delayMs, error: p.error } };
     case "agent.failed":
@@ -148,6 +156,24 @@ export function reduce(state: RunState, e: LabEvent): RunState {
     default:
       return state;
   }
+}
+
+/** The few-word form of a guidance message: the preset's label, or the first words of free text. */
+function shortGuidance(text: string): string {
+  const preset = GUIDANCE_PRESETS.find((g) => g.text === text);
+  if (preset) return preset.label;
+  const words = text.split(/\s+/);
+  return words.length > 6 ? words.slice(0, 6).join(" ") + "…" : text;
+}
+
+/** "flow 60, mixing 1" for an edits object. */
+function describeEdits(edits: Partial<ExperimentProposal>): string {
+  const parts: string[] = [];
+  if (edits.flow_rate_uL_per_s !== undefined) parts.push(`flow ${edits.flow_rate_uL_per_s}`);
+  if (edits.mixing_cycles !== undefined) parts.push(`mixing ${edits.mixing_cycles}`);
+  if (edits.tip !== undefined) parts.push(`tip ${edits.tip.replaceAll("_", " ")}`);
+  if (edits.wells !== undefined) parts.push(`wells ${edits.wells}`);
+  return parts.join(", ");
 }
 
 export function fold(runId: string, fluidId: FluidId, autoMode: boolean, events: LabEvent[]): RunState {

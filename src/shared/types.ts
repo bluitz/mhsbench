@@ -28,6 +28,20 @@ export const FAULT_DESCRIPTIONS: Record<FaultKind, { title: string; description:
   },
 };
 
+/** Preset guidance a reviewer can send. The label is the few-word form shown on the timeline. */
+export const GUIDANCE_PRESETS = [
+  { label: "bubbles, use clean wells and gentle mixing", text: "The error is caused by bubbles in the liquid. Move to clean wells and reduce mixing cycles to 1 or 0." },
+  { label: "replace the tip", text: "Replace the tip before the next transfer." },
+  { label: "slow down", text: "Slow down: try a lower flow rate." },
+];
+
+/** A flag shown above an experiment card: a fault was injected, or the reviewer stepped in. */
+export interface TimelineMarker {
+  tone: "fault" | "reviewer";
+  label: string;
+  beforeIndex: number; // the experiment it sits above
+}
+
 export type TipAction = "keep" | "replace" | "retry_pickup_next_position";
 export type WellsAction = "current" | "clean";
 
@@ -129,7 +143,7 @@ export interface RunState {
   experiments: ExperimentView[];
   pendingExperimentId: string | null;
   fault: { kind: FaultKind; active: boolean; detected: boolean; attempts: number; escalated: boolean } | null;
-  faultMarkers: { kind: FaultKind; beforeIndex: number }[]; // each injection, placed before the first experiment it could affect
+  markers: TimelineMarker[];
   retry: { attempt: number; maxAttempts: number; delayMs: number; error: string } | null;
   agentError: { error: string; attempts: number } | null;
   guidance: string[];

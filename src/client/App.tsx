@@ -7,6 +7,7 @@ import { FLUID_CARDS, FLUID_LIST } from "../shared/fluids";
 import { faultAttemptText, fold } from "../shared/reducer";
 import {
   FAULT_DESCRIPTIONS,
+  GUIDANCE_PRESETS,
   MAX_FAULT_ATTEMPTS,
   STAGE_TEXT,
   type ExperimentProposal,
@@ -15,13 +16,8 @@ import {
   type FluidId,
   type LabEvent,
   type RunState,
+  type TimelineMarker,
 } from "../shared/types";
-
-const GUIDANCE_PRESETS = [
-  "The error is caused by bubbles in the liquid. Move to clean wells and reduce mixing cycles to 1 or 0.",
-  "Replace the tip before the next transfer.",
-  "Slow down: try a lower flow rate.",
-];
 
 const REPLAY_STEP_MS = 400;
 
@@ -361,10 +357,10 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
         {state.experiments.length === 0 && <div className="muted">No experiments yet.</div>}
         {state.experiments.map((x) => (
           <div className="slot" key={x.id}>
-            {state.faultMarkers
+            {state.markers
               .filter((m) => m.beforeIndex === x.index)
               .map((m, i) => (
-                <FaultMarker key={i} kind={m.kind} />
+                <Marker key={i} marker={m} />
               ))}
             <ExperimentCard
               x={x}
@@ -375,11 +371,11 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
             />
           </div>
         ))}
-        {state.faultMarkers
+        {state.markers
           .filter((m) => m.beforeIndex > state.experiments.length)
           .map((m, i) => (
             <div className="slot" key={`pending-${i}`}>
-              <FaultMarker kind={m.kind} />
+              <Marker marker={m} />
             </div>
           ))}
       </div>
@@ -387,9 +383,9 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
   );
 }
 
-/** Red flag above the experiment a fault was injected before. */
-function FaultMarker({ kind }: { kind: FaultKind }) {
-  return <div className="fault-marker">Fault injected: {FAULT_DESCRIPTIONS[kind].title}</div>;
+/** Flag above an experiment card: red for an injected fault, light green for the reviewer stepping in. */
+function Marker({ marker }: { marker: TimelineMarker }) {
+  return <div className={`marker ${marker.tone}`}>{marker.label}</div>;
 }
 
 function ExperimentCard({
@@ -495,9 +491,9 @@ function HypothesisPanel({
         <div className="guidance">
           <strong>Guide the agent.</strong> Sending guidance replaces the pending hypothesis and the agent re-plans with it.
           <div className="button-row">
-            {GUIDANCE_PRESETS.map((text) => (
-              <button key={text} className="button secondary" disabled={disabled} onClick={() => post(`/api/runs/${runId}/guidance`, { text })}>
-                {text}
+            {GUIDANCE_PRESETS.map((g) => (
+              <button key={g.text} className="button secondary" disabled={disabled} onClick={() => post(`/api/runs/${runId}/guidance`, { text: g.text })}>
+                {g.text}
               </button>
             ))}
           </div>
@@ -770,7 +766,9 @@ const CSS = `
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
   .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; align-items: flex-end; min-height: 196px; }
   .slot { flex: 0 0 190px; display: grid; gap: 6px; }
-  .fault-marker { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
+  .marker { border-radius: 6px; padding: 5px 8px; font-size: 12px; font-weight: 600; max-width: 190px; }
+  .marker.fault { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; border-left: 5px solid #dc2626; }
+  .marker.reviewer { background: #dcfce7; color: #166534; border: 1px solid #86efac; border-left: 5px solid #16a34a; }
   .card { width: 100%; height: 176px; overflow: hidden; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; align-content: start; font-size: 13px; cursor: pointer; }
   .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.confirmed { border: 3px solid #facc15; padding: 7px 9px; }
