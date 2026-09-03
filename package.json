@@ -1,15 +1,27 @@
 {
   "name": "mhsbench",
-  "module": "index.ts",
+  "module": "src/server/index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "dev": "bun run build && bun --watch src/server/index.ts",
+    "build": "bun build src/client/main.tsx --outdir public --target browser",
+    "start": "bun src/server/index.ts",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.7"
   },
   "peerDependencies": {
     "typescript": "^7"
   },
   "dependencies": {
-    "hono": "^4.13.5"
+    "@anthropic-ai/sdk": "^0.123.0",
+    "hono": "^4.13.5",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   }
 }
