@@ -57,6 +57,7 @@ app.get("/api/runs/:id/events", (c) => {
     let sinceHeartbeat = 0;
     while (!closed) {
       while (incoming.length) await send(incoming.shift()!);
+      if (run.ended) break; // the run is over and every event has been sent, so end the stream
       await stream.sleep(POLL_MS);
       sinceHeartbeat += POLL_MS;
       if (sinceHeartbeat >= HEARTBEAT_MS) {
@@ -64,6 +65,7 @@ app.get("/api/runs/:id/events", (c) => {
         sinceHeartbeat = 0;
       }
     }
+    run.subscribers.delete(subscriber);
   });
 });
 

@@ -64,6 +64,9 @@ export function App() {
     source.addEventListener("lab", (message) => {
       const event = JSON.parse((message as MessageEvent).data) as LabEvent;
       setEvents((prev) => (prev.length && event.seq <= prev[prev.length - 1]!.seq ? prev : [...prev, event]));
+      // A finished run sends nothing more, so stop listening instead of reconnecting forever.
+      const stage = event.type === "loop.stage_changed" ? event.payload.stage : null;
+      if (stage === "complete" || stage === "aborted") source.close();
     });
     return () => source.close();
   }, [runId]);
