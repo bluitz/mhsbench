@@ -12,7 +12,7 @@ Live: https://mhsbench-production.up.railway.app
 
 1. Pick a sample: water (a simple aqueous reagent) or BSA (a viscous, foamy protein).
 2. Watch Claude run the loop: review history, propose a hypothesis, run it, read the plate, evaluate, repeat.
-3. Accept, edit, or reject each hypothesis before it runs. Or turn on auto mode and let a rule-based reviewer decide.
+3. Auto mode is on by default: a rule-based reviewer accepts or rejects each hypothesis. Turn it off to accept, edit, or reject each hypothesis yourself.
 4. Inject a fault: a failed tip pickup, a clogged tip, or bubbles in the wells.
 5. Watch the fault attempt counter. After three failed recovery attempts the run escalates and a human must approve every step until the fault is cleared. Preset guidance buttons let you tell the agent what is physically wrong.
 6. If the Claude API keeps failing for about a minute, the run pauses with the error and a Retry button. There is no hidden fallback: the agent is Claude or nothing.

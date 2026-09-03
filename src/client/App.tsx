@@ -121,7 +121,7 @@ export function App() {
 
 function Header({ runId, state, replaying }: { runId: string | null; state: RunState; replaying: boolean }) {
   const [fluidId, setFluidId] = useState<FluidId>("bsa");
-  const [autoMode, setAutoMode] = useState(false);
+  const [autoMode, setAutoMode] = useState(true); // new runs start in auto mode
 
   async function start() {
     const data = await post("/api/runs", { protein_id: fluidId, auto_mode: autoMode });
