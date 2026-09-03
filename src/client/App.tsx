@@ -45,6 +45,7 @@ export function App() {
   const [runId, setRunId] = useState<string | null>(runIdFromHash);
   const [events, setEvents] = useState<LabEvent[]>([]);
   const [replayCount, setReplayCount] = useState<number | null>(null); // null = live, otherwise how many events are shown
+  const [inspectedId, setInspectedId] = useState<string | null>(null); // an experiment card clicked to view its hypothesis
 
   // Follow the URL hash so a page reload, or a second tab, lands on its own run.
   useEffect(() => {
@@ -82,6 +83,10 @@ export function App() {
   const state = useMemo(() => fold(runId ?? "", "water", false, visibleEvents), [runId, visibleEvents]);
   const replaying = replayCount !== null;
   const ended = state.stage === "complete" || state.stage === "aborted";
+  const inspected = state.experiments.find((x) => x.id === inspectedId) ?? null;
+
+  // A new hypothesis takes over the panel, so an old card being inspected does not get stuck there.
+  useEffect(() => setInspectedId(null), [state.pendingExperimentId]);
 
   return (
     <div className="page">
@@ -90,9 +95,15 @@ export function App() {
       {runId && (
         <>
           <NowBanner state={state} runId={runId} disabled={replaying || ended} />
-          <Timeline state={state} />
+          <Timeline state={state} inspectedId={inspectedId} onInspect={setInspectedId} />
           <div className="columns">
-            <HypothesisPanel state={state} runId={runId} disabled={replaying || ended} />
+            <HypothesisPanel
+              state={state}
+              runId={runId}
+              disabled={replaying || ended}
+              inspected={inspected}
+              onCloseInspect={() => setInspectedId(null)}
+            />
             <Instruments state={state} runId={runId} disabled={replaying || ended} />
           </div>
           <EventLog
@@ -232,7 +243,7 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
 
 // ---------- Timeline: one card per experiment, colored by status ----------
 
-function Timeline({ state }: { state: RunState }) {
+function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspectedId: string | null; onInspect: (id: string) => void }) {
   const stripRef = useRef<HTMLDivElement>(null);
   const currentId = state.pendingExperimentId ?? state.experiments.find((x) => x.status === "running")?.id ?? state.experiments.at(-1)?.id;
 
@@ -245,7 +256,7 @@ function Timeline({ state }: { state: RunState }) {
   return (
     <section className="panel">
       <h2>Experiment timeline</h2>
-      <p className="muted">Every hypothesis the agent proposed, in order. Color shows its status.</p>
+      <p className="muted">Every hypothesis the agent proposed, in order. Color shows its status. Click one to see the hypothesis behind it.</p>
       <div className="legend">
         {(["proposed", "running", "success", "failure", "error", "rejected"] as const).map((s) => (
           <span key={s} className={`chip status-${s}`}>
@@ -256,17 +267,24 @@ function Timeline({ state }: { state: RunState }) {
       <div className="strip" ref={stripRef}>
         {state.experiments.length === 0 && <div className="muted">No experiments yet.</div>}
         {state.experiments.map((x) => (
-          <ExperimentCard key={x.id} x={x} current={x.id === currentId} />
+          <ExperimentCard key={x.id} x={x} current={x.id === currentId} inspected={x.id === inspectedId} onClick={() => onInspect(x.id)} />
         ))}
       </div>
     </section>
   );
 }
 
-function ExperimentCard({ x, current }: { x: ExperimentView; current: boolean }) {
+function ExperimentCard({ x, current, inspected, onClick }: { x: ExperimentView; current: boolean; inspected: boolean; onClick: () => void }) {
   const p = x.proposal;
   return (
-    <div className={`card status-${x.status} ${current ? "current" : ""}`} data-current={current}>
+    <div
+      className={`card status-${x.status} ${current ? "current" : ""} ${inspected ? "inspected" : ""}`}
+      data-current={current}
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => e.key === "Enter" && onClick()}
+    >
       <div className="card-head">
         <span>#{x.index}</span>
         <span className="status-label">{x.status}</span>
@@ -285,19 +303,34 @@ function ExperimentCard({ x, current }: { x: ExperimentView; current: boolean })
 
 // ---------- Hypothesis panel: accept, edit, reject, or guide ----------
 
-function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: string; disabled: boolean }) {
+function HypothesisPanel({
+  state,
+  runId,
+  disabled,
+  inspected,
+  onCloseInspect,
+}: {
+  state: RunState;
+  runId: string;
+  disabled: boolean;
+  inspected: ExperimentView | null;
+  onCloseInspect: () => void;
+}) {
   const pending = state.experiments.find((x) => x.id === state.pendingExperimentId);
+  // A clicked card shows its hypothesis read-only. Otherwise the panel shows the live one waiting for a decision.
+  const shown = inspected ?? pending;
+  const readOnly = inspected !== null && inspected.id !== pending?.id;
   const [edits, setEdits] = useState<Partial<ExperimentProposal>>({});
   const [reason, setReason] = useState("");
 
-  // Start each new hypothesis with a clean edit form.
+  // Start each hypothesis with a clean edit form.
   useEffect(() => {
     setEdits({});
     setReason("");
-  }, [pending?.id]);
+  }, [shown?.id]);
 
   const faultActive = Boolean(state.fault?.active && state.fault.detected);
-  const humanDecides = pending && (pending.escalation || !state.autoMode);
+  const humanDecides = !readOnly && pending !== undefined && (pending.escalation || !state.autoMode);
   const changed = Object.keys(edits).length > 0;
 
   function decide(decision: "accept" | "reject") {
@@ -311,10 +344,23 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
 
   return (
     <section className="panel">
-      <h2>Current hypothesis</h2>
-      <p className="muted">What the agent wants to run next, and why. You can accept it, change the numbers, or send it back.</p>
+      <div className="title-row">
+        <div>
+          <h2>{readOnly ? `Hypothesis behind experiment #${inspected?.index}` : "Current hypothesis"}</h2>
+          <p className="muted">
+            {readOnly
+              ? "The agent's reasoning for this experiment, the parameters it chose, and what the reviewer decided."
+              : "What the agent wants to run next and its reasoning. You can accept it, change the numbers, or send it back."}
+          </p>
+        </div>
+        {readOnly && (
+          <button className="button secondary" onClick={onCloseInspect}>
+            Back to current hypothesis
+          </button>
+        )}
+      </div>
 
-      {faultActive && (
+      {faultActive && !readOnly && (
         <div className="guidance">
           <strong>Guide the agent.</strong> Sending guidance replaces the pending hypothesis and the agent re-plans with it.
           <div className="button-row">
@@ -327,15 +373,17 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
         </div>
       )}
 
-      {!pending && <div className="muted">No hypothesis is waiting right now.</div>}
+      {!shown && <div className="muted">No hypothesis is waiting right now. Click an experiment above to see the hypothesis behind it.</div>}
 
-      {pending && (
-        <div className={`hypothesis ${pending.escalation ? "escalated" : ""}`}>
-          {pending.escalation && <div className="tag">Escalation: human approval required</div>}
-          <div className="rationale">{pending.proposal.rationale}</div>
-          {pending.proposal.diagnosis && (
+      {shown && (
+        <div className={`hypothesis ${shown.escalation ? "escalated" : ""}`}>
+          {shown.escalation && <div className="tag">Escalation: human approval required</div>}
+          <div className="rationale">
+            <strong>Reasoning:</strong> {shown.proposal.rationale}
+          </div>
+          {shown.proposal.diagnosis && (
             <div className="rationale">
-              <strong>Diagnosis:</strong> {pending.proposal.diagnosis}
+              <strong>Diagnosis:</strong> {shown.proposal.diagnosis}
             </div>
           )}
           <div className="edit-grid">
@@ -346,7 +394,7 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
                 min={5}
                 max={250}
                 disabled={!humanDecides || disabled}
-                value={edits.flow_rate_uL_per_s ?? pending.proposal.flow_rate_uL_per_s}
+                value={edits.flow_rate_uL_per_s ?? shown.proposal.flow_rate_uL_per_s}
                 onChange={(e) => setEdits({ ...edits, flow_rate_uL_per_s: Number(e.target.value) })}
               />
             </label>
@@ -357,7 +405,7 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
                 min={0}
                 max={10}
                 disabled={!humanDecides || disabled}
-                value={edits.mixing_cycles ?? pending.proposal.mixing_cycles}
+                value={edits.mixing_cycles ?? shown.proposal.mixing_cycles}
                 onChange={(e) => setEdits({ ...edits, mixing_cycles: Number(e.target.value) })}
               />
             </label>
@@ -365,7 +413,7 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
               Tip
               <select
                 disabled={!humanDecides || disabled}
-                value={edits.tip ?? pending.proposal.tip}
+                value={edits.tip ?? shown.proposal.tip}
                 onChange={(e) => setEdits({ ...edits, tip: e.target.value as ExperimentProposal["tip"] })}
               >
                 <option value="keep">keep</option>
@@ -377,7 +425,7 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
               Wells
               <select
                 disabled={!humanDecides || disabled}
-                value={edits.wells ?? pending.proposal.wells}
+                value={edits.wells ?? shown.proposal.wells}
                 onChange={(e) => setEdits({ ...edits, wells: e.target.value as ExperimentProposal["wells"] })}
               >
                 <option value="current">current</option>
@@ -385,7 +433,9 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
               </select>
             </label>
           </div>
-          {humanDecides ? (
+          {readOnly ? (
+            <div className="muted">{decisionSummary(shown)}</div>
+          ) : humanDecides ? (
             <>
               <input
                 className="reason"
@@ -410,6 +460,14 @@ function HypothesisPanel({ state, runId, disabled }: { state: RunState; runId: s
       )}
     </section>
   );
+}
+
+/** One line on what the reviewer did with a past hypothesis. */
+function decisionSummary(x: ExperimentView): string {
+  const by = (x.decidedBy ?? "").replaceAll("_", " ");
+  if (x.status === "rejected") return `Rejected by the ${by}: ${x.decisionReason ?? "no reason given"}.`;
+  if (x.decidedBy) return `Accepted by the ${by}${x.edits ? " with edits" : ""}.`;
+  return "Waiting for a decision.";
 }
 
 // ---------- Instruments and fault injection ----------
@@ -574,7 +632,8 @@ const CSS = `
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
   .strip { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 4px 12px; }
-  .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; }
+  .card { flex: 0 0 190px; border-radius: 10px; padding: 10px 12px; color: white; display: grid; gap: 3px; font-size: 13px; cursor: pointer; }
+  .card.inspected { box-shadow: 0 0 0 3px #1d4ed8; }
   .card.current { outline: 3px solid #111827; outline-offset: 2px; }
   .card.status-proposed { background: var(--proposed); } .card.status-running { background: var(--running); animation: pulse 1.2s infinite; }
   .card.status-success { background: var(--success); } .card.status-failure { background: var(--failure); } .card.status-error { background: var(--error); }
