@@ -30,26 +30,34 @@ function getClient(): Anthropic {
   return client;
 }
 
-export const claudeAgent: Agent = {
-  async propose(context) {
-    const response = await getClient().messages.create({
-      model: MODEL,
-      max_tokens: 2000,
-      thinking: { type: "adaptive" },
-      output_config: { effort: "medium" },
-      // The system prompt is the same on every call, so it is cached.
-      system: [{ type: "text", text: systemPrompt(context.manifest), cache_control: { type: "ephemeral" } }],
-      messages: [{ role: "user", content: userPrompt(context) }],
-    });
-    const text = response.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("");
-    return parseProposal(text);
-  },
-};
+/** The one call the agent makes. Injected so tests can capture the request and answer without the network. */
+export type SendMessage = (params: Anthropic.MessageCreateParamsNonStreaming) => Promise<Anthropic.Message>;
 
-function systemPrompt(manifest: string): string {
+export function createClaudeAgent(sendMessage: SendMessage): Agent {
+  return {
+    async propose(context) {
+      const response = await sendMessage({
+        model: MODEL,
+        max_tokens: 2000,
+        thinking: { type: "adaptive" },
+        output_config: { effort: "medium" },
+        // The system prompt is the same on every call, so it is cached.
+        system: [{ type: "text", text: systemPrompt(context.manifest), cache_control: { type: "ephemeral" } }],
+        messages: [{ role: "user", content: userPrompt(context) }],
+      });
+      const text = response.content
+        .filter((block) => block.type === "text")
+        .map((block) => block.text)
+        .join("");
+      if (!text) throw new Error("Claude returned no text");
+      return parseProposal(text);
+    },
+  };
+}
+
+export const claudeAgent: Agent = createClaudeAgent((params) => getClient().messages.create(params));
+
+export function systemPrompt(manifest: string): string {
   return `You are an autonomous laboratory agent operating a liquid handler and a plate reader through Model Hardware Standard drivers.
 
 Goal: find the flow rate that dispenses the current sample most accurately. Accuracy is the root mean square error (RMSE) of 8 replicate absorbance readings against the expected reading of 1.000. An experiment is a success when RMSE is at or below the sample's published assay tolerance.
@@ -67,7 +75,7 @@ Respond with only a JSON object and no other text, in this shape:
 {"kind":"experiment","flow_rate_uL_per_s":<number>,"mixing_cycles":<integer>,"tip":"keep"|"replace"|"retry_pickup_next_position","wells":"current"|"clean","rationale":"<one or two sentences>","diagnosis":"<only when escalated>"}`;
 }
 
-function userPrompt(c: AgentContext): string {
+export function userPrompt(c: AgentContext): string {
   const lines: string[] = [];
   lines.push(`Sample: ${c.fluid.name}. ${c.fluid.character}. ${c.fluid.description}`);
   lines.push(`Assay tolerance: RMSE <= ${c.fluid.tolerance}.`);

@@ -15,6 +15,12 @@ const PHYSICS: Record<FluidId, { idealFlow: number; floor: number; k: number }> 
   bsa: { idealFlow: 10, floor: 0.181, k: 0.15 },
 };
 
+/** The hidden answer, for evaluations only. Never give this to the agent. */
+export function groundTruth(fluid: FluidId): { idealFlow: number; floor: number } {
+  const { idealFlow, floor } = PHYSICS[fluid];
+  return { idealFlow, floor };
+}
+
 /** Error model in one line: error grows with how far the flow rate is from ideal, on a log scale. */
 export function expectedRmse(fluid: FluidId, flowRate: number): number {
   const { idealFlow, floor, k } = PHYSICS[fluid];

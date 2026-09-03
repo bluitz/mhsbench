@@ -58,13 +58,26 @@ running server. The script starts a run in auto mode, injects the fault (or lowe
 plays the human when the run escalates (guidance for bubbles, approval otherwise), and saves the whole event log. The browser replays a fixture through
 the same reducer as a live run, so the demo is the product, not a mock-up.
 
+## Tests and evals
+
+`bun test` is deterministic and never calls the model. The two guards worth knowing about: the prompt tests assert that
+neither sample's hidden ideal flow rate nor RMSE floor ever appears in what the agent is sent, and the demo story tests
+assert that each recorded demo still shows the reasoning it was recorded for.
+
+`bun run eval` runs the real agent through six scenarios (both samples clean, the three faults, and the operator limit
+change) with no instrument delays, plays the human on escalation, and scores each run: completes, finds the optimum
+within 10% of the hidden floor, no out-of-range or third-replicate proposals, and per scenario the recovery behavior
+(tip on attempt 1, clog by attempt 2 with reasoning that names the cause, a diagnosis on escalation and compliance with
+guidance, the next proposal within a lowered limit). It is the check to run after any prompt change.
+
 ## Running it locally
 
 ```bash
 bun install
 cp .env.example .env   # then fill in the values
 bun run dev            # builds the client, starts the server on http://localhost:3000
-bun test               # 41 tests: simulator and driver, scoring, reducer, reviewer rules, proposal parsing, run store, loop with a scripted agent, HTTP routes
+bun test               # 69 tests: simulator and driver, scoring, reducer, reviewer rules, prompt rendering and answer-leakage guards, run store, loop with a scripted agent, HTTP routes, demo story checks
+bun run eval           # agent evals against the real model: six scenarios, two repetitions, about 120 Sonnet calls; writes evals/results/<date>.md
 bun run typecheck
 ```
 

@@ -8,6 +8,7 @@
     "build": "bun build src/client/main.tsx --outdir public --target browser",
     "start": "bun src/server/index.ts",
     "test": "bun test",
+    "eval": "bun evals/agent-eval.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
