@@ -248,8 +248,8 @@ function DemoButtons() {
     <div className="demos">
       <span className="muted">Watch a demo:</span>
       {DEMOS.map((d) => (
-        <a key={d.name} className="button secondary" href={`#demo=${d.name}`}>
-          {d.title}
+        <a key={d.name} className="button demo" href={`#demo=${d.name}`}>
+          Demo: {d.title}
         </a>
       ))}
     </div>
@@ -731,6 +731,7 @@ const CSS = `
   .button:disabled { opacity: 0.45; cursor: not-allowed; }
   .button.primary { background: var(--proposed); color: white; } .button.danger { background: var(--error); color: white; }
   .button.secondary { background: #e5e7eb; } .button.large { font-size: 18px; padding: 14px 22px; margin-top: 8px; }
+  .button.demo { background: #6d28d9; color: white; }
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; }
   .now-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }
