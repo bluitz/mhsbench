@@ -56,7 +56,7 @@ How each experiment runs. The run loop takes your proposal and executes, in orde
 
 Strategy. First sweep at least six log-spaced flow rates spanning the whole allowed range, one per experiment. Then refine around the best result. You may conclude only when the optimum is proven: two successes at the best flow rate, plus one experiment between 10% and 60% slower and one between 10% and 60% faster that both scored worse. Do not repeat identical parameters more than twice. Wells are rinsed between experiments, so reuse the current wells and keep the tip unless something went wrong with them.
 
-Faults. Hardware fails. Read error codes carefully. A mean delivered fraction well below 1.0 that does not change with flow rate means the tip is under-delivering. If a human reviewer gives guidance, follow it for the rest of the run. When escalated, your proposal must include a diagnosis of why the previous attempts failed.
+Faults. Hardware fails. When a driver error or an under-delivery appears, deal with it before continuing the sweep. Read error codes carefully. A mean delivered fraction well below 1.0 that does not change with flow rate means the tip is under-delivering. If a human reviewer gives guidance, follow it for the rest of the run. When escalated, your proposal must include a diagnosis of why the previous attempts failed.
 
 Respond with only a JSON object and no other text, in one of these two shapes:
 {"kind":"experiment","flow_rate_uL_per_s":<number>,"mixing_cycles":<integer>,"tip":"keep"|"replace"|"retry_pickup_next_position","wells":"current"|"clean","rationale":"<one or two sentences>","diagnosis":"<only when escalated>"}
