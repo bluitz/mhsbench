@@ -18,7 +18,8 @@ type BenchAction = { fault: FaultKind } | { flowRateMax: number };
 interface Scenario {
   name: string;
   fluid: FluidId;
-  action: BenchAction | null; // what the human does after the third experiment
+  action: BenchAction | null; // what the human does once the sweep is under way
+  actAfter?: number; // how many experiments to let finish first (default 3)
 }
 
 const SCENARIOS: Scenario[] = [
@@ -27,7 +28,8 @@ const SCENARIOS: Scenario[] = [
   { name: "tip", fluid: "water", action: { fault: "tip_pickup_failed" } },
   { name: "clog", fluid: "bsa", action: { fault: "clogged_tip" } },
   { name: "bubbles", fluid: "bsa", action: { fault: "bubbles" } },
-  { name: "limit", fluid: "bsa", action: { flowRateMax: 100 } },
+  // The limit is lowered early so the sweep still has a high flow rate left for the driver to refuse.
+  { name: "limit", fluid: "bsa", action: { flowRateMax: 100 }, actAfter: 2 },
 ];
 
 const REPS = Number(process.env.EVAL_REPS ?? 2);
@@ -65,7 +67,7 @@ async function runScenario(scenario: Scenario, rep: number): Promise<Outcome> {
     if (event.type === "hypothesis.proposed") lastProposalId = payload.experimentId;
     if (event.type === "experiment.completed") {
       completedExperiments += 1;
-      if (completedExperiments === ACT_AFTER_EXPERIMENTS && scenario.action && !acted) {
+      if (completedExperiments === (scenario.actAfter ?? ACT_AFTER_EXPERIMENTS) && scenario.action && !acted) {
         acted = true;
         if ("fault" in scenario.action) run.injectFault(scenario.action.fault);
         else run.setFlowRateLimit(scenario.action.flowRateMax);
@@ -89,6 +91,8 @@ async function runScenario(scenario: Scenario, rep: number): Promise<Outcome> {
   const timeout = setTimeout(() => run.abort("eval timed out"), RUN_TIMEOUT_MS);
   await runLoop(run, claudeAgent, noWait);
   clearTimeout(timeout);
+  // Keep the full transcript so a failed run can be read afterwards.
+  await Bun.write(`${resultsDir}/${scenario.name}-${rep}.json`, JSON.stringify(run.events, null, 2));
   const outcome = score(scenario, rep, run.events);
   console.log(`${scenario.name} #${rep}: ${outcome.checks.every((c) => c.pass) ? "PASS" : "FAIL"} in ${outcome.experiments} experiments`);
   return outcome;
@@ -164,11 +168,13 @@ function report(outcomes: Outcome[]): string {
   return lines.join("\n") + "\n";
 }
 
+const stamp = new Date().toISOString().slice(0, 16).replace(":", "-");
+const resultsDir = `evals/results/${stamp}`;
 const jobs: Promise<Outcome>[] = [];
 for (const scenario of SCENARIOS) for (let rep = 1; rep <= REPS; rep++) jobs.push(runScenario(scenario, rep));
 const outcomes = await Promise.all(jobs);
 const text = report(outcomes);
-const file = `evals/results/${new Date().toISOString().slice(0, 16).replace(":", "-")}.md`;
+const file = `${resultsDir}.md`;
 await Bun.write(file, text);
 console.log("\n" + text);
 console.log(`saved ${file}`);
