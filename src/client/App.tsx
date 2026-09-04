@@ -2,7 +2,7 @@
  * The whole user interface in one file. Everything on screen is a fold of the event stream,
  * so replaying a run is just folding fewer events.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { FLUID_CARDS, FLUID_LIST } from "../shared/fluids";
 import { faultAttemptText, fold } from "../shared/reducer";
 import {
@@ -279,7 +279,9 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
   return (
     <section className={`now stage-${state.stage}`}>
       <div className="now-label">Now</div>
-      <CrossFade text={STAGE_TEXT[state.stage]} />
+      <FadeSwap id={STAGE_TEXT[state.stage]}>
+        <div className="now-text">{STAGE_TEXT[state.stage]}</div>
+      </FadeSwap>
       {state.retry && (
         <div className="now-detail">
           Claude API error, retry {state.retry.attempt} of {state.retry.maxAttempts}, waiting {Math.round(state.retry.delayMs / 1000)} s.
@@ -317,28 +319,31 @@ function NowBanner({ state, runId, disabled }: { state: RunState; runId: string;
   );
 }
 
-/** Swap the banner text gently: the old line fades out underneath while the new one fades in. */
-function CrossFade({ text }: { text: string }) {
-  const [shown, setShown] = useState(text);
-  const [previous, setPrevious] = useState<string | null>(null);
+/** Swap content gently: whatever was showing fades out underneath while the new content fades in. Keyed by id. */
+function FadeSwap({ id, children }: { id: string; children: ReactNode }) {
+  const last = useRef({ id, children });
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [outgoing, setOutgoing] = useState<{ id: string; children: ReactNode } | null>(null);
 
   useEffect(() => {
-    if (text === shown) return;
-    setPrevious(shown);
-    setShown(text);
-    const timer = setTimeout(() => setPrevious(null), CROSSFADE_MS);
-    return () => clearTimeout(timer);
-  }, [text, shown]);
+    if (last.current.id !== id) {
+      setOutgoing(last.current);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setOutgoing(null), CROSSFADE_MS);
+    }
+    last.current = { id, children };
+  });
+  useEffect(() => () => clearTimeout(timer.current ?? undefined), []);
 
   return (
-    <div className="crossfade">
-      {previous && (
-        <div key={`old-${previous}`} className="now-text fade-out">
-          {previous}
+    <div className="fade-swap">
+      {outgoing && (
+        <div key={`out-${outgoing.id}`} className="fade-out">
+          {outgoing.children}
         </div>
       )}
-      <div key={`new-${shown}`} className="now-text fade-in">
-        {shown}
+      <div key={`in-${id}`} className="fade-in">
+        {children}
       </div>
     </div>
   );
@@ -562,6 +567,7 @@ function HypothesisPanel({
         )}
       </div>
 
+      <FadeSwap id={`${shown?.id ?? "none"}|${readOnly}|${faultActive}`}>
       {faultActive && !readOnly && (
         <div className="guidance">
           <strong>Guide the agent.</strong> Sending guidance replaces the pending hypothesis and the agent re-plans with it.
@@ -660,6 +666,7 @@ function HypothesisPanel({
           )}
         </div>
       )}
+      </FadeSwap>
     </section>
   );
 }
@@ -842,9 +849,9 @@ const CSS = `
   .button.demo.active { background: #3b0764; outline: 3px solid #c4b5fd; outline-offset: 2px; }
   .button-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
   .now { border-radius: 12px; padding: 18px 22px; color: white; background: #374151; display: grid; gap: 6px; transition: background-color 0.5s ease; }
-  .crossfade { position: relative; }
-  .crossfade .fade-out { position: absolute; inset: 0; animation: fadeOut 0.4s ease forwards; }
-  .crossfade .fade-in { animation: fadeIn 0.4s ease; }
+  .fade-swap { position: relative; overflow: hidden; }
+  .fade-swap > .fade-out { position: absolute; inset: 0; animation: fadeOut 0.4s ease forwards; pointer-events: none; }
+  .fade-swap > .fade-in { animation: fadeIn 0.4s ease; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
   .now-label { font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.8; }

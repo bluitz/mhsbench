@@ -73,10 +73,12 @@ export class Simulator implements BenchControl {
   private bubblyWells: string | null = null; // which wells currently have bubbles, as 'plate-group'
   private humanInLoop = false;
 
+  /** A fresh bench for one sample: no tip attached, first plate, default flow rate and mixing. */
   constructor(private fluid: FluidId) {}
 
   // --- BenchControl: the human at the bench ---
 
+  /** The human introduces a fault. The tip fault lands on the current rack position, bubbles on the current wells. */
   inject(fault: FaultKind): void {
     this.fault = fault;
     if (fault === "tip_pickup_failed") {
@@ -87,16 +89,19 @@ export class Simulator implements BenchControl {
     if (fault === "bubbles") this.bubblyWells = this.wellKey();
   }
 
+  /** Which fault is still present on the bench, or null. The loop reads this to declare recovery. */
   activeFault(): FaultKind | null {
     return this.fault;
   }
 
+  /** Records that a human has taken over after escalation. Bubbles can only clear once this is true. */
   setHumanInLoop(v: boolean): void {
     this.humanInLoop = v;
   }
 
   // --- What the driver can see ---
 
+  /** The instrument panel: everything the driver is allowed to read, as one tag snapshot. */
   snapshot(): DeviceState {
     const row = ROW_LETTERS[this.wellGroup - 1] ?? "?";
     return {
@@ -113,6 +118,7 @@ export class Simulator implements BenchControl {
     };
   }
 
+  /** Run one driver command against the simulated instruments and report success or a device error. */
   execute(cmd: BenchCommand): BenchOutcome {
     switch (`${cmd.device}.${cmd.action}`) {
       case "liquid_handler.write":
@@ -149,10 +155,12 @@ export class Simulator implements BenchControl {
     }
   }
 
+  /** Names the current group of wells as 'plate-group', used to tell bubbly wells from clean ones. */
   private wellKey(): string {
     return `${this.plateNumber}-${this.wellGroup}`;
   }
 
+  /** Seat a tip, optionally advancing one rack position first. Fails with E-101 at the bad position. */
   private pickUpTip(advance: boolean): BenchOutcome {
     if (advance) this.tipPosition += 1;
     if (this.badTipPosition === this.tipPosition) {
@@ -187,6 +195,7 @@ export class Simulator implements BenchControl {
     };
   }
 
+  /** Dispense into the 8 wells. Delivered volumes spread around the target by the error model, and a clog halves them. */
   private transfer(): BenchOutcome {
     if (!this.tipAttached) return { ok: false, code: "E-102", message: "NO_TIP: cannot transfer without a tip." };
     const blocked = this.bubblesBlockTransfer();
@@ -203,6 +212,7 @@ export class Simulator implements BenchControl {
     return { ok: true, data: { dispensed_volume_uL: this.lastDispensedUl } };
   }
 
+  /** Mix the current wells. Has no effect on the readings, except that bubbles can block it. */
   private mix(): BenchOutcome {
     if (!this.tipAttached) return { ok: false, code: "E-102", message: "NO_TIP: cannot mix without a tip." };
     const blocked = this.bubblesBlockTransfer();
@@ -210,6 +220,7 @@ export class Simulator implements BenchControl {
     return { ok: true, data: { cycles: this.mixingCycles } };
   }
 
+  /** Read the 8 wells the plate reader is looking at. Fails if nothing has been dispensed into them. */
   private readAbsorbance(): BenchOutcome {
     if (!this.lastDeliveredFractions) {
       return { ok: false, code: "E-401", message: "NO_SAMPLE: the target wells contain no dispensed liquid." };
@@ -274,6 +285,7 @@ export class Driver {
   // Live limits start from the manifest. An operator can tighten one during a run; the agent's reference text does not change.
   private limits = new Map<string, { min: number; max: number; changedByOperator: boolean }>();
 
+  /** Copy the manifest ranges into live limits. The bench and the command logger are the only things it holds. */
   constructor(
     private bench: Simulator,
     private onCommand: (record: CommandRecord) => void,
@@ -283,6 +295,7 @@ export class Driver {
     }
   }
 
+  /** The operator tightens a write limit mid-run. Later writes above it are refused, and the message says why. */
   setLimit(tag: string, max: number): void {
     const limit = this.limits.get(tag);
     if (!limit) return;
@@ -290,10 +303,12 @@ export class Driver {
     limit.changedByOperator = true;
   }
 
+  /** The current instrument state, passed straight through from the bench. */
   snapshot(): DeviceState {
     return this.bench.snapshot();
   }
 
+  /** Set a tag on a device. Refused, and never sent, if the tag is unknown or the value is outside the live limit. */
   write(device: Device, tag: string, value: number): DriverResult {
     const known = this.manifest(device).some((e) => e.kind === "write" && e.name === tag);
     const limit = this.limits.get(tag);
@@ -310,6 +325,7 @@ export class Driver {
     return result;
   }
 
+  /** Run a named action on a device. Refused if the manifest does not list it. Every call is logged either way. */
   call(device: Device, action: string, params: Record<string, unknown> = {}): DriverResult {
     const known = this.manifest(device).some((e) => e.kind === "action" && e.name === action);
     const result = known ? this.send({ device, action, params }) : this.reject(`No action named ${action}.`);
@@ -317,14 +333,17 @@ export class Driver {
     return result;
   }
 
+  /** The manifest for one device. */
   private manifest(device: Device): ManifestEntry[] {
     return device === "liquid_handler" ? LIQUID_HANDLER_MANIFEST : PLATE_READER_MANIFEST;
   }
 
+  /** A refusal that never reached the bench, with the current state attached so the instrument panel stays accurate. */
   private reject(message: string): DriverResult {
     return { ok: false, code: "DRIVER_REJECTED", message, state: this.bench.snapshot() };
   }
 
+  /** Pass a checked command to the bench and attach the state afterwards. */
   private send(cmd: BenchCommand): DriverResult {
     const outcome = this.bench.execute(cmd);
     return { ...outcome, state: this.bench.snapshot() };
