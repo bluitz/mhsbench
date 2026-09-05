@@ -100,7 +100,21 @@ export interface LabEvent {
   payload: Record<string, unknown>;
 }
 
+/** Where an experiment is in its life, and how it ended. STATUS_LEGEND says what each value means. */
 export type ExperimentStatus = "proposed" | "running" | "success" | "failure" | "error" | "rejected";
+
+/**
+ * One line per status, shown in the timeline legend. A clogged tip lands in "failure", not "error",
+ * because the bench reports no error code for it, only a low delivered volume.
+ */
+export const STATUS_LEGEND: Record<ExperimentStatus, string> = {
+  proposed: "waiting for a decision from the reviewer or a human",
+  running: "the loop is driving the bench",
+  success: "ran and was read; RMSE within the fluid's tolerance",
+  failure: "ran and was read; RMSE above tolerance. A normal test result, not a device error",
+  error: "the driver or a device returned an error code; nothing was measured",
+  rejected: "the decision was reject; it never ran",
+};
 
 export interface DeviceState {
   liquid_handler: {

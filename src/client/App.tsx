@@ -10,7 +10,9 @@ import {
   GUIDANCE_PRESETS,
   MAX_FAULT_ATTEMPTS,
   STAGE_TEXT,
+  STATUS_LEGEND,
   type ExperimentProposal,
+  type ExperimentStatus,
   type ExperimentView,
   type FaultKind,
   type FluidId,
@@ -421,10 +423,11 @@ function Timeline({ state, inspectedId, onInspect }: { state: RunState; inspecte
       <h2>Experiment timeline</h2>
       <p className="muted">Every hypothesis the agent proposed, in order. Color shows its status. Click one to see the hypothesis behind it.</p>
       <div className="legend">
-        {(["proposed", "running", "success", "failure", "error", "rejected"] as const).map((s) => (
-          <span key={s} className={`chip status-${s}`}>
-            {s}
-          </span>
+        {(Object.keys(STATUS_LEGEND) as ExperimentStatus[]).map((s) => (
+          <div className="legend-row" key={s}>
+            <span className={`chip status-${s}`}>{s}</span>
+            <span className="small muted">{STATUS_LEGEND[s]}</span>
+          </div>
         ))}
       </div>
       <div className="strip" ref={stripRef}>
@@ -862,7 +865,8 @@ const CSS = `
   .stage-proposing, .stage-reviewing_history, .stage-reviewing { background: #1e3a8a; }
   .stage-awaiting_approval { background: #5b21b6; } .stage-running, .stage-evaluating { background: #0f766e; }
   .stage-awaiting_human { background: #991b1b; } .stage-agent_error { background: #7f1d1d; } .stage-complete { background: #166534; }
-  .legend { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 4px 16px; margin-bottom: 10px; }
+  .legend-row { display: flex; align-items: center; gap: 8px; } .legend .muted { margin: 0; }
   .chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: white; }
   .chip.status-proposed { background: var(--proposed); } .chip.status-running { background: var(--running); } .chip.status-success { background: var(--success); }
   .chip.status-failure { background: var(--failure); } .chip.status-error { background: var(--error); } .chip.status-rejected { background: var(--rejected); }
